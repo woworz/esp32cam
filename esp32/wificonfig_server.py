@@ -1,9 +1,36 @@
+"""
+wificonfig_server.py - WiFi 配置服务器 (AP 模式专用)
+
+本模块在 AP 模式下运行，提供一个 Web 页面让用户配置 WiFi 连接。
+当 ESP32-S3 无法连接到已保存的 WiFi 时，可启动此模块进行配置。
+
+工作流程:
+    1. ESP32-S3 启动 AP 热点 "ESP32-CAM-Config"
+    2. 用户手机/电脑连接此热点
+    3. 浏览器访问 http://192.168.4.1
+    4. 在页面上选择/输入 WiFi 名称和密码
+    5. 保存后 ESP32-S3 重启，尝试连接新配置的 WiFi
+
+依赖: socket, json, network, wifimgr
+"""
+
 import socket
 import json
 import network
 
 
 def _build_html(wifi_manager):
+    """
+    生成 WiFi 配置页面 HTML
+
+    扫描附近的 WiFi 网络，生成包含下拉列表的配置表单。
+
+    参数:
+        wifi_manager (WiFiManager): WiFi 管理器实例
+
+    返回:
+        str: 完整的 HTML 页面字符串
+    """
     nets = wifi_manager.scan_networks()
     options = ""
     for net in nets:
@@ -77,6 +104,16 @@ msg.textContent='请求失败: '+e.message;
 
 
 def _handle_http(client, wifi_manager):
+    """
+    处理 HTTP 请求
+
+    参数:
+        client: socket 客户端连接
+        wifi_manager (WiFiManager): WiFi 管理器实例
+
+    返回:
+        bool: True 继续服务, False 保存配置后关闭 (设备将重启)
+    """
     try:
         client.settimeout(5)
         req = client.recv(1024).decode("utf-8")
@@ -84,28 +121,37 @@ def _handle_http(client, wifi_manager):
             client.close()
             return True
 
+        # 解析请求行
         lines = req.split("\r\n")
         first = lines[0]
         method, path, _ = first.split(" ")
 
+        # GET / - 显示配置页面
         if method == "GET" and (path == "/" or path == "/index.html"):
             html = _build_html(wifi_manager)
             resp = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n" + html
             client.send(resp.encode("utf-8"))
+
+        # POST /save - 保存 WiFi 配置
         elif method == "POST" and path == "/save":
             body = lines[-1] if lines[-1] else ""
             data = json.loads(body)
             ssid = data.get("ssid", "")
             password = data.get("password", "")
+            # 保存配置到文件
             wifi_manager.save_config({"ssid": ssid, "password": password, "static_ip": "", "subnet_mask": "", "gateway": ""})
+            # 返回成功响应
             resp = 'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{"status":"ok"}'
             client.send(resp.encode("utf-8"))
             client.close()
+            # 延迟后重启设备，使新配置生效
             import machine
             import time
             time.sleep(1)
             machine.reset()
             return False
+
+        # 其他路径返回 404
         else:
             resp = "HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n"
             client.send(resp.encode("utf-8"))
@@ -121,6 +167,20 @@ def _handle_http(client, wifi_manager):
 
 
 def run(wifi_manager, ap):
+    """
+    启动 WiFi 配置服务器
+
+    在 AP 模式下运行，监听 80 端口，提供 Web 配置界面。
+
+    参数:
+        wifi_manager (WiFiManager): WiFi 管理器实例
+        ap: AP 模式接口对象 (由 WiFiManager.start_ap_mode() 返回)
+
+    使用方式:
+        wm = WiFiManager()
+        ap = wm.start_ap_mode()
+        wificonfig_server.run(wm, ap)
+    """
     addr = ("0.0.0.0", 80)
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -134,6 +194,6 @@ def run(wifi_manager, ap):
             client, client_addr = sock.accept()
             if not _handle_http(client, wifi_manager):
                 sock.close()
-                return
+                return  # 用户保存配置后关闭服务器，设备将重启
         except OSError:
-            pass
+            pass  # 超时无连接，继续循环

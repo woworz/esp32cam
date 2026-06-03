@@ -1,3 +1,23 @@
+"""
+app.py - Flask 图片处理服务端
+
+本模块是运行在 PC/服务器上的 Flask 应用，提供以下功能:
+    1. 接收 ESP32 上传的图片
+    2. 叠加文字时间戳
+    3. 可选转发到其他服务器
+    4. 提供图片浏览画廊
+    5. 远程触发 ESP32 拍照
+
+启动方式:
+    cd server
+    python app.py
+
+依赖:
+    - Flask: pip install flask
+    - Pillow: pip install Pillow
+    - requests: pip install requests (用于转发)
+"""
+
 import os
 import uuid
 import requests
@@ -16,14 +36,40 @@ from config import (
 )
 from utils.image_processor import add_text_overlay, build_timestamp_text
 
+# 创建 Flask 应用实例
 app = Flask(__name__)
 
+# 确保存储目录存在
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(PROCESSED_FOLDER, exist_ok=True)
 
 
 @app.route("/upload", methods=["POST"])
 def upload():
+    """
+    接收 ESP32 上传的图片
+
+    请求格式: multipart/form-data
+        - image: JPEG 图片文件
+        - text:  标识文字 (可选)
+        - position: 文字位置 (可选，默认 bottom)
+
+    返回:
+        成功:
+        {
+            "status": "ok",
+            "message": "上传成功",
+            "raw": "原始文件名",
+            "processed": "处理后文件名",
+            "text": "叠加的文字内容"
+        }
+        失败:
+        {
+            "status": "error",
+            "message": "错误描述"
+        }
+    """
+    # 检查是否包含图片文件
     if "image" not in request.files:
         return jsonify({"status": "error", "message": "未找到图片文件"}), 400
 
@@ -31,14 +77,17 @@ def upload():
     if file.filename == "":
         return jsonify({"status": "error", "message": "文件名为空"}), 400
 
-    custom_text = request.form.get("text", "")
-    position = request.form.get("position", TEXT_POSITION)
+    # 获取可选参数
+    custom_text = request.form.get("text", "")  # 自定义标识文字
+    position = request.form.get("position", TEXT_POSITION)  # 文字位置
 
+    # 保存原始图片 (使用 UUID 防止文件名冲突)
     ext = os.path.splitext(file.filename)[1] or ".jpg"
     raw_name = f"{uuid.uuid4().hex}{ext}"
     raw_path = os.path.join(UPLOAD_FOLDER, raw_name)
     file.save(raw_path)
 
+    # 处理图片: 叠加文字时间戳
     processed_name = f"{uuid.uuid4().hex}.jpg"
     processed_path = os.path.join(PROCESSED_FOLDER, processed_name)
 
@@ -53,6 +102,7 @@ def upload():
         font_path=FONT_PATH,
     )
 
+    # 可选: 转发到其他服务器
     if FORWARD_URL:
         try:
             with open(processed_path, "rb") as f:
@@ -77,6 +127,18 @@ def upload():
 
 @app.route("/image/<filename>")
 def get_image(filename):
+    """
+    获取指定图片
+
+    优先从 processed 目录查找，其次从 uploads 目录查找。
+
+    参数:
+        filename (str): 图片文件名
+
+    返回:
+        成功: 图片文件 (image/jpeg)
+        失败: 404 JSON 错误
+    """
     filepath = os.path.join(PROCESSED_FOLDER, filename)
     if not os.path.exists(filepath):
         filepath = os.path.join(UPLOAD_FOLDER, filename)
@@ -87,6 +149,13 @@ def get_image(filename):
 
 @app.route("/latest")
 def latest():
+    """
+    获取最新的一张处理后图片
+
+    返回:
+        成功: 最新图片文件 (image/jpeg)
+        失败: 404 JSON 错误
+    """
     processed_files = sorted(
         [f for f in os.listdir(PROCESSED_FOLDER) if f.endswith(".jpg")],
         key=lambda f: os.path.getmtime(os.path.join(PROCESSED_FOLDER, f)),
@@ -101,6 +170,16 @@ def latest():
 
 @app.route("/trigger", methods=["GET", "POST"])
 def trigger_capture():
+    """
+    远程触发 ESP32 拍照
+
+    通过 HTTP GET 请求触发 ESP32 的 /capture 接口。
+    需要在 config.py 中配置 ESP32_URL。
+
+    返回:
+        成功: {"status": "ok", "message": "...", "esp32_response": {...}}
+        失败: {"status": "error", "message": "错误描述"}
+    """
     if not ESP32_URL:
         return jsonify({"status": "error", "message": "未配置 ESP32_URL，请在 config.py 中设置 ESP32 的拍照触发地址"}), 400
 
@@ -120,21 +199,30 @@ def trigger_capture():
 @app.route("/")
 @app.route("/gallery")
 def gallery():
+    """
+    照片画廊页面
+
+    展示所有已处理的照片，支持点击查看大图。
+    页面每 10 秒自动刷新。
+    """
     images = sorted(
         [f for f in os.listdir(PROCESSED_FOLDER) if f.endswith(".jpg")],
         key=lambda f: os.path.getmtime(os.path.join(PROCESSED_FOLDER, f)),
         reverse=True,
     )
+    # 生成图片网格 HTML (最多显示 20 张)
     image_items = "\n".join(
         f'<div class="item"><a href="/image/{img}" target="_blank"><img src="/image/{img}" loading="lazy"></a></div>'
         for img in images[:20]
     )
     image_count = len(images)
+
+    # ESP32 视频流卡片 (仅当配置了 ESP32_URL 时显示)
     esp32_section = ""
     if ESP32_URL:
         esp32_section = f'''
     <div class="card">
-      <h2>📡 ESP32 实时视频流</h2>
+      <h2>ESP32 实时视频流</h2>
       <p class="sub">打开以下地址查看实时MJPEG画面</p>
       <p class="url"><a href="{ESP32_URL.replace("/capture", "")}" target="_blank">{ESP32_URL.replace("/capture", "/")}</a></p>
     </div>'''
@@ -169,17 +257,17 @@ body{{font-family:-apple-system,sans-serif;background:#0f0f0f;color:#eee;min-hei
 </head>
 <body>
 <div class="header">
-<h1>📷 ESP32-CAM 照片库</h1>
+<h1>ESP32-CAM 照片库</h1>
 <span class="stats">共 {image_count} 张照片</span>
 </div>
 <div class="cards">
   <div class="card">
-    <h2>🖼️ 处理后的照片</h2>
+    <h2>处理后的照片</h2>
     <p class="sub">已叠加文字时间戳</p>
     <p class="sub">最近更新: {image_items[:1] and '有' or '无'}</p>
   </div>
   <div class="card">
-    <h2>📤 上传端</h2>
+    <h2>上传端</h2>
     <p class="sub">ESP32 POST到 /upload 接口</p>
     <p class="url"><code>POST /upload</code> (multipart)</p>
   </div>
@@ -195,4 +283,5 @@ body{{font-family:-apple-system,sans-serif;background:#0f0f0f;color:#eee;min-hei
 
 
 if __name__ == "__main__":
+    print(f"[Server] 启动服务 -> http://{HOST}:{PORT}")
     app.run(host=HOST, port=PORT, debug=True)

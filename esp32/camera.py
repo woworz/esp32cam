@@ -1,49 +1,99 @@
+"""
+camera.py - OV2640 摄像头驱动模块 (ESP32-S3 专用)
+
+本模块封装了 OV2640 摄像头的初始化、拍照、参数设置等功能。
+适配 ESP32-S3-DevKitC-1 开发板，通过 DVP 并行接口连接 OV2640。
+
+硬件连接 (ESP32-S3 <-> OV2640):
+    数据线: D0=GPIO11, D1=GPIO9,  D2=GPIO8,  D3=GPIO10
+            D4=GPIO12, D5=GPIO18, D6=GPIO17, D7=GPIO16
+    控制线: PCLK=GPIO13, VSYNC=GPIO6, HREF=GPIO7
+            XCLK=GPIO15 (时钟输出), RESET=GPIO14
+    I2C:    SIOD(SDA)=GPIO4, SIOC(SCL)=GPIO5
+    电源:   PWDN 直接接 GND (摄像头常开)
+
+依赖: MicroPython camera 模块 (ESP32-S3 固件内置)
+"""
+
 import camera
 import time
 
 
 class Camera:
+    """
+    OV2640 摄像头控制类
 
-    # ESP32-S3 OV2640 引脚配置
-    PIN_D0 = 11
-    PIN_D1 = 9
-    PIN_D2 = 8
-    PIN_D3 = 10
-    PIN_D4 = 12
-    PIN_D5 = 18
-    PIN_D6 = 17
-    PIN_D7 = 16
-    PIN_XCLK = 15    # TODO: 确认XCLK实际连接引脚
-    PIN_PCLK = 13
-    PIN_VSYNC = 6
-    PIN_HREF = 7
-    PIN_SIOD = 4     # I2C SDA
-    PIN_SIOC = 5     # I2C SCL
-    PIN_RESET = 14
-    PIN_PWDN = -1    # 直接接GND，摄像头常开
+    提供摄像头初始化、拍照、分辨率/质量设置等功能。
+    所有引脚配置为类常量，修改引脚只需更改常量值。
 
-    # 分辨率常量
-    FRAMESIZE_QQVGA = 0    # 160x120
-    FRAMESIZE_QVGA = 7     # 320x240
-    FRAMESIZE_VGA = 8      # 400x296
-    FRAMESIZE_SVGA = 9     # 480x320
-    FRAMESIZE_XGA = 12     # 1024x768
-    FRAMESIZE_HD = 13      # 1280x720
-    FRAMESIZE_SXGA = 14    # 1280x1024
-    FRAMESIZE_UXGA = 15    # 1600x1200
+    使用示例:
+        cam = Camera(framesize=Camera.FRAMESIZE_VGA, quality=12)
+        cam.init()
+        img_buf = cam.capture()
+        cam.deinit()
+    """
 
-    def __init__(
-        self,
-        framesize=8,  # VGA
-        quality=12,
-    ):
+    # ==================== ESP32-S3 OV2640 引脚配置 ====================
+    # 数据总线 (8位并行，用于传输图像数据)
+    PIN_D0 = 11     # 数据位0
+    PIN_D1 = 9      # 数据位1
+    PIN_D2 = 8      # 数据位2
+    PIN_D3 = 10     # 数据位3
+    PIN_D4 = 12     # 数据位4
+    PIN_D5 = 18     # 数据位5
+    PIN_D6 = 17     # 数据位6
+    PIN_D7 = 16     # 数据位7
+
+    # 时钟与同步信号
+    PIN_XCLK = 15   # 外部时钟输出，ESP32-S3为OV2640提供主时钟
+    PIN_PCLK = 13   # 像素时钟输入，每个时钟周期传输一个像素数据
+    PIN_VSYNC = 6   # 垂直同步信号，标识一帧图像的开始
+    PIN_HREF = 7    # 水平参考信号，标识一行像素数据的有效区间
+
+    # SCCB (I2C) 配置接口，用于设置OV2640寄存器
+    PIN_SIOD = 4    # SCCB 数据线 (等同 I2C SDA)
+    PIN_SIOC = 5    # SCCB 时钟线 (等同 I2C SCL)
+
+    # 控制引脚
+    PIN_RESET = 14  # 摄像头复位引脚，低电平有效
+    PIN_PWDN = -1   # 掉电控制，-1 表示直接接 GND，摄像头始终工作
+
+    # ==================== 分辨率常量 ====================
+    # 这些常量对应 MicroPython camera 模块的 framesize 枚举值
+    FRAMESIZE_QQVGA = 0     # 96x96      (缩略图)
+    FRAMESIZE_QVGA = 7      # 320x240    (低清)
+    FRAMESIZE_VGA = 8       # 400x296    (标清，推荐)
+    FRAMESIZE_SVGA = 9      # 480x320    (高清)
+    FRAMESIZE_XGA = 12      # 1024x768   (超清)
+    FRAMESIZE_HD = 13       # 1280x720   (720P)
+    FRAMESIZE_SXGA = 14     # 1280x1024  (SXGA)
+    FRAMESIZE_UXGA = 15     # 1600x1200  (UXGA，最大分辨率)
+
+    def __init__(self, framesize=8, quality=12):
+        """
+        初始化摄像头参数 (不会立即启动硬件)
+
+        参数:
+            framesize (int): 分辨率，使用 FRAMESIZE_* 常量，默认 VGA (8)
+            quality (int): JPEG 压缩质量，范围 0-63，值越小质量越高，默认 12
+        """
         self.framesize = framesize
         self.quality = quality
-        self._initialized = False
+        self._initialized = False  # 硬件初始化状态标志
 
     def init(self):
+        """
+        初始化 OV2640 摄像头硬件
+
+        调用 MicroPython camera.init() 并传入所有引脚配置。
+        初始化后设置分辨率、质量、图像效果等参数。
+
+        异常:
+            Exception: 摄像头初始化失败 (引脚冲突、硬件连接问题等)
+        """
         print("[Camera] 初始化 OV2640 (ESP32-S3) ...")
         try:
+            # 调用底层 camera 模块初始化，传入 DVP 接口全部引脚
             camera.init(
                 d0=self.PIN_D0,
                 d1=self.PIN_D1,
@@ -63,16 +113,17 @@ class Camera:
                 pwdn=self.PIN_PWDN,
             )
 
-            camera.framesize(self.framesize)
-            camera.quality(self.quality)
-            camera.speffect(0)   # EFFECT_NONE
-            camera.whitebalance(0)  # WB_NONE
-            camera.saturation(0)
-            camera.brightness(0)
-            camera.contrast(0)
+            # 设置图像参数
+            camera.framesize(self.framesize)     # 分辨率
+            camera.quality(self.quality)         # JPEG 质量
+            camera.speffect(0)                   # 特效: 0=无特效
+            camera.whitebalance(0)               # 白平衡: 0=关闭自动
+            camera.saturation(0)                 # 饱和度: 0=默认
+            camera.brightness(0)                 # 亮度: 0=默认
+            camera.contrast(0)                   # 对比度: 0=默认
 
             self._initialized = True
-            time.sleep(1)
+            time.sleep(1)  # 等待摄像头稳定
             print(f"[Camera] 初始化成功 (分辨率:{self._framesize_name()} 质量:{self.quality})")
 
         except Exception as e:
@@ -80,27 +131,55 @@ class Camera:
             raise
 
     def deinit(self):
+        """
+        释放摄像头硬件资源
+
+        释放后可重新调用 init() 初始化。
+        """
         if self._initialized:
             camera.deinit()
             self._initialized = False
+            print("[Camera] 已释放")
 
     def capture(self):
+        """
+        拍摄一张照片
+
+        返回 JPEG 格式的图像数据 (bytes)。
+        如果摄像头未初始化，会自动调用 init()。
+
+        返回:
+            bytes: JPEG 图像数据，失败返回 None
+        """
         if not self._initialized:
             self.init()
         buf = camera.capture()
         return buf
 
     def set_framesize(self, fs):
+        """
+        动态修改分辨率
+
+        参数:
+            fs (int): 新的分辨率值，使用 FRAMESIZE_* 常量
+        """
         self.framesize = fs
         if self._initialized:
             camera.framesize(fs)
 
     def set_quality(self, q):
+        """
+        动态修改 JPEG 压缩质量
+
+        参数:
+            q (int): 新的质量值 (0-63)，值越小质量越高
+        """
         self.quality = q
         if self._initialized:
             camera.quality(q)
 
     def _framesize_name(self):
+        """返回当前分辨率的可读名称 (内部方法)"""
         names = {
             0: "96x96",
             1: "128x128",
