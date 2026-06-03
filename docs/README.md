@@ -71,6 +71,19 @@
 | BOOT 按键        | GPIO0   | 下载模式，带自动下载电路      |
 | 拍照按键 (可选)  | GPIO21  | 上拉输入，按下接地            |
 
+### TFT 显示屏连接 (1.8寸 ST7789 240x320)
+
+| 功能      | TFT引脚 | ESP32-S3 GPIO | 说明                     |
+|-----------|---------|---------------|--------------------------|
+| SPI 时钟  | SCK     | GPIO39        | SPI 时钟线               |
+| SPI 数据  | SDA     | GPIO38        | SPI MOSI 数据线          |
+| 片选      | CS      | GPIO37        | SPI 片选 (低电平有效)    |
+| 数据/命令 | DC      | GPIO36        | 高电平=数据, 低电平=命令 |
+| 复位      | RST     | GPIO35        | 低电平复位               |
+| 背光      | BL      | GPIO40        | 高电平开启背光           |
+| 电源正极  | VCC     | 3.3V          | **必须接3.3V! 不要接5V** |
+| 电源负极  | GND     | GND           | 接地                     |
+
 ---
 
 ## 3. 文件结构
@@ -81,6 +94,7 @@ esp_cam/
 │   ├── boot.py               # 启动脚本 (Thonny 自动执行)
 │   ├── main_app.py           # 主程序 (HTTP服务器 + 拍照上传)
 │   ├── camera.py             # OV3660 摄像头驱动封装
+│   ├── tft_display.py        # ST7789 TFT 显示屏驱动封装
 │   ├── wifimgr.py            # WiFi 连接管理
 │   ├── wificonfig_server.py  # AP模式配置服务器
 │   └── wifi_config.json      # WiFi 配置文件 (运行时生成)

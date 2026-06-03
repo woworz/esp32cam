@@ -31,6 +31,7 @@ import _thread
 import json as json_mod
 from wifimgr import WiFiManager
 from camera import Camera
+from tft_display import ST7789
 
 # ==================== 全局配置 ====================
 BUTTON_PIN = 21     # 物理按键引脚 (GPIO21，上拉输入，按下接地)
@@ -39,6 +40,7 @@ IMAGE_TEXT = "ESP32-S3 CAM"  # 叠加在照片上的标识文字
 
 # ==================== 全局状态 ====================
 camera_obj = None       # 摄像头对象实例
+tft_obj = None          # TFT 显示屏对象实例
 wifi_manager = None     # WiFi 管理器实例
 capture_flag = False    # 拍照触发标志 (True=需要拍照)
 capture_lock = _thread.allocate_lock()  # 线程锁，保护 capture_flag 的并发访问
@@ -427,14 +429,45 @@ def _button_thread():
         time.sleep(0.05)  # 50ms 轮询间隔
 
 
+def _display_on_tft(img_data):
+    """
+    将 JPEG 图像显示在 TFT 屏幕上
+
+    参数:
+        img_data (bytes): JPEG 格式的图像数据
+
+    注意: 需要 JPEG 解码库支持。如果没有解码库，会显示提示信息。
+    """
+    if not tft_obj:
+        return
+
+    try:
+        # 尝试使用 JPEG 解码库 (如果可用)
+        import jpegdecoder
+        decoder = jpegdecoder.JPEGDecoder()
+        decoder.decode(img_data)
+        rgb_data = decoder.get_rgb_data()
+        tft_obj.show_image(rgb_data, 0, 0, decoder.width, decoder.height)
+    except ImportError:
+        # 没有 JPEG 解码库，显示提示信息
+        tft_obj.fill(0x0000)
+        tft_obj.show_text("Photo Captured", 40, 150, 0x07E0, 1)
+        tft_obj.show_text(f"Size: {len(img_data)}B", 60, 180, 0xFFFF, 1)
+    except Exception as e:
+        print(f"[TFT] 显示失败: {e}")
+        tft_obj.fill(0x0000)
+        tft_obj.show_text("Display Error", 50, 150, 0xF800, 1)
+
+
 def _capture_worker():
     """
     拍照任务线程 (独立线程运行)
 
     持续检查 capture_flag，为 True 时执行:
         1. 从摄像头捕获一帧图像
-        2. 上传到远程服务器
-        3. 清除标志
+        2. 显示在 TFT 屏幕上
+        3. 上传到远程服务器
+        4. 清除标志
     """
     global capture_flag
     while True:
@@ -450,6 +483,9 @@ def _capture_worker():
             buf = camera_obj.capture()
             if buf:
                 print(f"[拍照] 照片大小: {len(buf)} bytes")
+                # 显示在 TFT 屏幕上
+                _display_on_tft(buf)
+                # 上传到服务器
                 _upload_to_server(buf)
                 print("[拍照] 完成")
             else:
@@ -467,14 +503,15 @@ def run():
     执行流程:
         1. 初始化 WiFi 连接
         2. 初始化摄像头
-        3. 启动按键监听和拍照任务线程
-        4. 启动 HTTP 服务器 (端口 80)
+        3. 初始化 TFT 显示屏
+        4. 启动按键监听和拍照任务线程
+        5. 启动 HTTP 服务器 (端口 80)
 
     使用方法 (Thonny):
         >>> import main_app
         >>> main_app.run()
     """
-    global camera_obj, wifi_manager
+    global camera_obj, tft_obj, wifi_manager
 
     # 1. 初始化 WiFi
     wifi_manager = WiFiManager()
@@ -488,11 +525,17 @@ def run():
     camera_obj = Camera(framesize=Camera.FRAMESIZE_VGA, quality=12)
     camera_obj.init()
 
-    # 3. 启动后台线程
+    # 3. 初始化 TFT 显示屏
+    tft_obj = ST7789()
+    tft_obj.init()
+    tft_obj.fill(0x0000)  # 黑色背景
+    tft_obj.show_text("ESP32-CAM", 80, 150, 0x07E0, 2)  # 绿色文字
+
+    # 4. 启动后台线程
     _thread.start_new_thread(_button_thread, ())    # 按键监听
     _thread.start_new_thread(_capture_worker, ())   # 拍照任务
 
-    # 4. 启动 HTTP 服务器
+    # 5. 启动 HTTP 服务器
     addr = ("0.0.0.0", 80)
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
