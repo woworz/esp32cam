@@ -1,0 +1,10 @@
+HOST = "0.0.0.0"
+PORT = 5000
+UPLOAD_FOLDER = "uploads"
+PROCESSED_FOLDER = "processed"
+FORWARD_URL = None  # 如需转发到另一个服务器，设置为目标URL
+ESP32_URL = None    # ESP32的拍照触发地址，如 "http://192.168.1.50/capture"，设置后可远程触发拍照
+FONT_PATH = None    # 自定义字体路径，None则使用默认字体
+TEXT_POSITION = "bottom"  # top / bottom / center
+TEXT_COLOR = (255, 255, 255)
+TEXT_BG_COLOR = (0, 0, 0, 128)  # 半透明黑色背景

@@ -1,0 +1,7 @@
+{
+    "ssid": "你的WiFi名称",
+    "password": "你的WiFi密码",
+    "static_ip": "",
+    "subnet_mask": "",
+    "gateway": ""
+}
