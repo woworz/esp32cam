@@ -1,10 +1,10 @@
 """
-camera.py - OV2640 摄像头驱动模块 (ESP32-S3 专用)
+camera.py - OV3660 摄像头驱动模块 (ESP32-S3 专用)
 
-本模块封装了 OV2640 摄像头的初始化、拍照、参数设置等功能。
-适配 ESP32-S3-DevKitC-1 开发板，通过 DVP 并行接口连接 OV2640。
+本模块封装了 OV3660 摄像头的初始化、拍照、参数设置等功能。
+适配 ESP32-S3-DevKitC-1 开发板，通过 DVP 并行接口连接 OV3660。
 
-硬件连接 (ESP32-S3 <-> OV2640):
+硬件连接 (ESP32-S3 <-> OV3660):
     数据线: D0=GPIO11, D1=GPIO9,  D2=GPIO8,  D3=GPIO10
             D4=GPIO12, D5=GPIO18, D6=GPIO17, D7=GPIO16
     控制线: PCLK=GPIO13, VSYNC=GPIO6, HREF=GPIO7
@@ -21,7 +21,7 @@ import time
 
 class Camera:
     """
-    OV2640 摄像头控制类
+    OV3660 摄像头控制类
 
     提供摄像头初始化、拍照、分辨率/质量设置等功能。
     所有引脚配置为类常量，修改引脚只需更改常量值。
@@ -33,7 +33,7 @@ class Camera:
         cam.deinit()
     """
 
-    # ==================== ESP32-S3 OV2640 引脚配置 ====================
+    # ==================== ESP32-S3 OV3660 引脚配置 ====================
     # 数据总线 (8位并行，用于传输图像数据)
     PIN_D0 = 11     # 数据位0
     PIN_D1 = 9      # 数据位1
@@ -45,7 +45,7 @@ class Camera:
     PIN_D7 = 16     # 数据位7
 
     # 时钟与同步信号
-    PIN_XCLK = 15   # 外部时钟输出，ESP32-S3为OV2640提供主时钟
+    PIN_XCLK = 15   # 外部时钟输出，ESP32-S3为OV3660提供主时钟
     PIN_PCLK = 13   # 像素时钟输入，每个时钟周期传输一个像素数据
     PIN_VSYNC = 6   # 垂直同步信号，标识一帧图像的开始
     PIN_HREF = 7    # 水平参考信号，标识一行像素数据的有效区间
@@ -60,6 +60,7 @@ class Camera:
 
     # ==================== 分辨率常量 ====================
     # 这些常量对应 MicroPython camera 模块的 framesize 枚举值
+    # OV3660 支持最高 2048x1536 (QXGA)
     FRAMESIZE_QQVGA = 0     # 96x96      (缩略图)
     FRAMESIZE_QVGA = 7      # 320x240    (低清)
     FRAMESIZE_VGA = 8       # 400x296    (标清，推荐)
@@ -67,7 +68,8 @@ class Camera:
     FRAMESIZE_XGA = 12      # 1024x768   (超清)
     FRAMESIZE_HD = 13       # 1280x720   (720P)
     FRAMESIZE_SXGA = 14     # 1280x1024  (SXGA)
-    FRAMESIZE_UXGA = 15     # 1600x1200  (UXGA，最大分辨率)
+    FRAMESIZE_UXGA = 15     # 1600x1200  (UXGA)
+    FRAMESIZE_QXGA = 16     # 2048x1536  (QXGA，OV3660最大分辨率)
 
     def __init__(self, framesize=8, quality=12):
         """
@@ -91,7 +93,7 @@ class Camera:
         异常:
             Exception: 摄像头初始化失败 (引脚冲突、硬件连接问题等)
         """
-        print("[Camera] 初始化 OV2640 (ESP32-S3) ...")
+        print("[Camera] 初始化 OV3660 (ESP32-S3) ...")
         try:
             # 调用底层 camera 模块初始化，传入 DVP 接口全部引脚
             camera.init(
@@ -196,5 +198,6 @@ class Camera:
             13: "1280x720",
             14: "1280x1024",
             15: "1600x1200",
+            16: "2048x1536",
         }
         return names.get(self.framesize, "未知")
