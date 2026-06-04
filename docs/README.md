@@ -2,12 +2,14 @@
 
 ## 1. 项目概述
 
-本项目是一个基于 **ESP32-S3 + OV3660** 的无线图传系统，支持:
+本项目是一个基于 **ESP32-S3 + OV3660 + ST7789 TFT** 的无线图传系统，支持:
 - MJPEG 实时视频流
 - 按键/HTTP 触发拍照
 - 照片上传到远程服务器
 - 服务器端自动叠加文字时间戳
-- Web 界面远程控制
+- **1.8寸 TFT 彩屏实时显示**
+- 可视化 Web 后端界面
+- 远程触发拍照
 
 ### 系统架构
 
@@ -18,18 +20,24 @@
 │  │ OV3660   │  │ WiFi     │  │ HTTP Server (80)     │  │
 │  │ 摄像头   │──│ Manager  │──│ - MJPEG 视频流       │  │
 │  └──────────┘  └──────────┘  │ - 拍照上传           │  │
-│                              │ - WiFi 配置页面      │  │
-│                              └──────────┬───────────┘  │
+│       │                      │ - WiFi 配置页面      │  │
+│       ▼                      └──────────┬───────────┘  │
+│  ┌──────────┐                           │              │
+│  │ ST7789   │                           │ HTTP POST    │
+│  │ TFT 屏幕 │◄──────────────────────────┘              │
+│  │ 240x320  │                                          │
+│  └──────────┘                                          │
 └─────────────────────────────────────────┼───────────────┘
-                                          │ HTTP POST
+                                          │
                                           ▼
 ┌─────────────────────────────────────────────────────────┐
 │                      服务端 (PC)                        │
 │  ┌──────────────────────────────────────────────────┐  │
-│  │ Flask Server (:5000)                             │  │
+│  │ Flask Server (:5000) - 可视化后端                 │  │
 │  │ - /upload     接收图片，叠加时间戳                │  │
-│  │ - /gallery    照片画廊                            │  │
-│  │ - /latest     获取最新照片                        │  │
+│  │ - /gallery    可视化照片画廊                      │  │
+│  │ - /api/images 图片列表 API                       │  │
+│  │ - /api/stats  统计信息 API                       │  │
 │  │ - /trigger    远程触发拍照                        │  │
 │  └──────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────┘
@@ -196,14 +204,51 @@ def run():
     执行流程:
         1. 初始化 WiFi 连接
         2. 初始化摄像头 (VGA, quality=12)
-        3. 启动按键监听线程 (GPIO21)
-        4. 启动拍照任务线程
-        5. 启动 HTTP 服务器 (端口80)
+        3. 初始化 TFT 显示屏
+        4. 启动按键监听线程 (GPIO21)
+        5. 启动拍照任务线程
+        6. 启动 HTTP 服务器 (端口80)
 
     使用:
         >>> import main_app
         >>> main_app.run()
     """
+```
+
+#### `tft_display.py` - ST7789 类
+
+```python
+class ST7789:
+    """ST7789 TFT 显示屏控制类 (240x320)"""
+
+    # 引脚配置
+    PIN_SCK = 39    # SPI 时钟
+    PIN_SDA = 38    # SPI 数据 (MOSI)
+    PIN_CS = 37     # 片选
+    PIN_DC = 36     # 数据/命令
+    PIN_RST = 35    # 复位
+    PIN_BL = 40     # 背光
+
+    def __init__(self):
+        """初始化显示屏参数"""
+
+    def init(self):
+        """初始化硬件，发送初始化命令序列"""
+
+    def deinit(self):
+        """释放硬件资源"""
+
+    def fill(self, color: int):
+        """用指定颜色填充整个屏幕 (RGB565)"""
+
+    def show_image(self, img_data: bytes, x: int, y: int, width: int, height: int):
+        """在指定位置显示图像"""
+
+    def show_text(self, text: str, x: int, y: int, color: int = 0xFFFF, size: int = 1):
+        """在指定位置显示文本"""
+
+    def set_backlight(self, on: bool):
+        """控制背光开关"""
 ```
 
 #### `wificonfig_server.py` - 全局函数
@@ -420,7 +465,42 @@ FONT_PATH = "C:/Windows/Fonts/simhei.ttf"
 | `/image/<fn>`    | GET  | 获取图片           | -               | image/*  |
 | `/latest`        | GET  | 获取最新图片       | -               | image/*  |
 | `/trigger`       | GET  | 远程触发拍照       | -               | JSON     |
-| `/` or `/gallery`| GET  | 照片画廊           | -               | HTML     |
+| `/` or `/gallery`| GET  | 可视化画廊页面     | -               | HTML     |
+| `/api/images`    | GET  | 获取图片列表       | -               | JSON     |
+| `/api/image/<fn>`| DELETE | 删除图片        | -               | JSON     |
+| `/api/stats`     | GET  | 获取统计信息       | -               | JSON     |
+
+#### `/api/images` 响应示例
+
+```json
+{
+    "status": "ok",
+    "count": 10,
+    "images": [
+        {
+            "filename": "a1b2c3d4.jpg",
+            "size": 12345,
+            "created": "2024-01-01T12:00:00",
+            "url": "/image/a1b2c3d4.jpg"
+        }
+    ]
+}
+```
+
+#### `/api/stats` 响应示例
+
+```json
+{
+    "status": "ok",
+    "stats": {
+        "processed_count": 10,
+        "raw_count": 10,
+        "total_size": 123456,
+        "esp32_configured": true,
+        "esp32_url": "http://192.168.1.xxx/capture"
+    }
+}
+```
 
 ---
 
@@ -459,6 +539,19 @@ FONT_PATH = "C:/Windows/Fonts/simhei.ttf"  # Windows
 FONT_PATH = "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"  # Linux
 ```
 
+### Q: TFT 显示屏无显示?
+A: 检查:
+1. VCC 是否接 3.3V (不要接 5V!)
+2. SPI 引脚连接是否正确
+3. 背光引脚 BL 是否接高电平
+4. 是否安装了正确的 MicroPython 固件
+
+### Q: TFT 显示屏颜色异常?
+A: 检查:
+1. ST7789 初始化命令是否正确
+2. RGB565 格式是否匹配
+3. 尝试调整 `CMD_MADCTL` 值 (横屏/竖屏)
+
 ---
 
 ## 8. 依赖清单
@@ -474,9 +567,12 @@ FONT_PATH = "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"  # Linux
 
 ### 服务端
 ```
-flask>=2.0
-Pillow>=9.0
-requests>=2.28
+flask>=3.0
+Pillow>=10.0
+requests>=2.31
 ```
 
 安装: `pip install -r requirements.txt`
+
+### 可选依赖
+- `jpegdecoder` - JPEG 解码库 (用于 TFT 显示 JPEG 图像)
