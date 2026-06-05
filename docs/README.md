@@ -25,13 +25,13 @@
                                           ▼
 ┌─────────────────────────────────────────────────────────┐
 │                      服务端 (PC)                        │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │ Flask Server (:5000)                             │  │
-│  │ - /upload     接收图片，叠加时间戳                │  │
-│  │ - /gallery    照片画廊                            │  │
-│  │ - /latest     获取最新照片                        │  │
-│  │ - /trigger    远程触发拍照                        │  │
-│  └──────────────────────────────────────────────────┘  │
+│  ┌─────────────────────┐  ┌──────────────────────────┐ │
+│  │ Flask Backend (:5000)│  │ Frontend SPA (:8080)     │ │
+│  │ - /upload           │  │ - 独立 HTML/CSS/JS       │ │
+│  │ - /api/images       │◄─┤ - 调用 REST API          │ │
+│  │ - /api/stats        │  │ - 照片画廊展示           │ │
+│  │ - /trigger          │  │                          │ │
+│  └─────────────────────┘  └──────────────────────────┘ │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -99,12 +99,23 @@ esp_cam/
 │   ├── wificonfig_server.py  # AP模式配置服务器
 │   └── wifi_config.json      # WiFi 配置文件 (运行时生成)
 │
-├── server/                   # PC/服务器端
-│   ├── app.py                # Flask 主应用
+├── frontend/                 # 前端 SPA (独立运行)
+│   ├── index.html            # 主页面
+│   ├── style.css             # 样式文件
+│   └── app.js                # 前端逻辑 (调用后端 API)
+│
+├── server/                   # PC/服务器端 (Flask JSON API)
+│   ├── app.py                # Flask 应用入口
 │   ├── config.py             # 配置文件
 │   ├── requirements.txt      # Python 依赖
 │   ├── uploads/              # 原始上传图片 (运行时生成)
 │   ├── processed/            # 处理后图片 (运行时生成)
+│   ├── routes/               # API 路由模块
+│   │   ├── upload.py         # 上传相关路由
+│   │   ├── images.py         # 图片查询/删除路由
+│   │   └── trigger.py        # 远程触发路由
+│   ├── services/             # 业务逻辑层
+│   │   └── image_service.py  # 图片处理服务
 │   └── utils/
 │       ├── __init__.py
 │       └── image_processor.py # 图片处理工具
@@ -228,14 +239,15 @@ def run(wifi_manager, ap):
 
 #### `app.py` - Flask 路由
 
-| 路由              | 方法     | 功能                          |
-|------------------|----------|-------------------------------|
-| `POST /upload`   | POST     | 接收ESP32上传的图片           |
-| `GET /image/<fn>`| GET      | 获取指定图片                  |
-| `GET /latest`    | GET      | 获取最新处理后的图片          |
-| `GET /trigger`   | GET/POST | 远程触发ESP32拍照             |
-| `GET /`          | GET      | 照片画廊页面                  |
-| `GET /gallery`   | GET      | 照片画廊页面 (同上)           |
+| 路由                   | 方法     | 功能                          |
+|-----------------------|----------|-------------------------------|
+| `POST /upload`        | POST     | 接收ESP32上传的图片           |
+| `GET /image/<fn>`     | GET      | 获取指定图片                  |
+| `GET /latest`         | GET      | 获取最新处理后的图片          |
+| `GET /trigger`        | GET/POST | 远程触发ESP32拍照             |
+| `GET /api/images`     | GET      | 获取照片列表 (JSON)           |
+| `GET /api/stats`      | GET      | 获取统计信息 (JSON)           |
+| `DELETE /api/image/<fn>`| DELETE | 删除指定图片                  |
 
 #### `/upload` 接口详细说明
 
@@ -299,6 +311,31 @@ def add_text_overlay(
 def build_timestamp_text(custom_text: str = "") -> str:
     """构建时间戳文字，如 "ESP32  |  2024-01-01 12:00:00" """
 ```
+
+### 4.3 前端模块
+
+#### 前端架构
+
+前端是一个独立的单页应用 (SPA)，使用纯 HTML/CSS/JS 实现，不依赖任何构建工具。
+
+**特点:**
+- 独立运行，与后端完全分离
+- 通过 REST API 与 Flask 后端通信
+- 使用 `fetch()` 调用后端接口
+- 照片画廊、统计信息、远程触发等功能均通过 API 实现
+
+#### 如何运行前端
+
+在 `frontend/` 目录下启动一个静态文件服务器:
+
+```bash
+cd frontend
+python -m http.server 8080
+```
+
+然后浏览器访问 **http://localhost:8080**
+
+**注意:** 前端默认连接后端的地址是 `http://localhost:5000`。如果后端运行在其他地址，需要修改 `frontend/app.js` 中的 `API_BASE_URL`。
 
 ---
 
@@ -379,8 +416,9 @@ python app.py
 ```
 
 服务端启动后:
-- 访问 **http://localhost:5000/** 查看照片画廊
+- 后端只提供 JSON API，不再提供 HTML 页面
 - ESP32 拍照后会自动上传到此服务端
+- 前端需要单独启动，详见 [4.3 前端模块](#43-前端模块)
 
 ### 5.5 配置服务端
 
@@ -414,13 +452,15 @@ FONT_PATH = "C:/Windows/Fonts/simhei.ttf"
 
 ### 6.2 服务端 API
 
-| 端点              | 方法 | 说明                | 请求格式         | 响应格式 |
-|------------------|------|--------------------|-----------------|----------|
-| `/upload`        | POST | 上传图片           | multipart/form  | JSON     |
-| `/image/<fn>`    | GET  | 获取图片           | -               | image/*  |
-| `/latest`        | GET  | 获取最新图片       | -               | image/*  |
-| `/trigger`       | GET  | 远程触发拍照       | -               | JSON     |
-| `/` or `/gallery`| GET  | 照片画廊           | -               | HTML     |
+| 端点                   | 方法   | 说明                | 请求格式         | 响应格式 |
+|-----------------------|--------|--------------------|-----------------|----------|
+| `/upload`             | POST   | 上传图片           | multipart/form  | JSON     |
+| `/image/<fn>`         | GET    | 获取图片           | -               | image/*  |
+| `/latest`             | GET    | 获取最新图片       | -               | image/*  |
+| `/trigger`            | GET    | 远程触发拍照       | -               | JSON     |
+| `/api/images`         | GET    | 获取照片列表       | -               | JSON     |
+| `/api/stats`          | GET    | 获取统计信息       | -               | JSON     |
+| `/api/image/<fn>`     | DELETE | 删除指定图片       | -               | JSON     |
 
 ---
 
@@ -475,6 +515,7 @@ FONT_PATH = "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"  # Linux
 ### 服务端
 ```
 flask>=2.0
+flask-cors>=4.0
 Pillow>=9.0
 requests>=2.28
 ```
