@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32-CAM 可视化后端</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="header">
+        <div class="header-left">
+            <h1>📷 ESP32-CAM</h1>
+            <span class="header-badge">可视化后端</span>
+        </div>
+        <div class="header-stats">
+            <div class="stat-item">
+                <div class="stat-value" id="photo-count">-</div>
+                <div class="stat-label">照片总数</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="esp32-status">❌ 未配置</div>
+                <div class="stat-label">ESP32 状态</div>
+            </div>
+        </div>
+    </header>
+
+    <main class="main">
+        <div class="control-cards">
+            <!-- ESP32 Stream Card -->
+            <div class="control-card" id="esp32-card" style="display: none;">
+                <div class="card-header">
+                    <span class="card-icon">📹</span>
+                    <h3>ESP32 实时预览</h3>
+                </div>
+                <div class="stream-container">
+                    <img id="esp32-stream" src="" alt="ESP32 Stream">
+                    <div class="stream-overlay">
+                        <span class="live-badge">LIVE</span>
+                    </div>
+                </div>
+                <div class="card-actions">
+                    <a id="esp32-fullscreen" href="" target="_blank" class="btn btn-secondary">打开全屏</a>
+                    <button class="btn btn-primary" onclick="triggerCapture()">远程拍照</button>
+                </div>
+            </div>
+
+            <!-- Stats Card -->
+            <div class="control-card stats-card">
+                <div class="card-header">
+                    <span class="card-icon">📊</span>
+                    <h3>系统统计</h3>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <div class="value" id="processed-count">-</div>
+                        <div class="label">已处理</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="value" id="raw-count">-</div>
+                        <div class="label">原始图片</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="value" id="total-size">-</div>
+                        <div class="label">总大小</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="value">ST7789</div>
+                        <div class="label">TFT 屏幕</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- API Info Card -->
+            <div class="control-card">
+                <div class="card-header">
+                    <span class="card-icon">🔗</span>
+                    <h3>API 接口</h3>
+                </div>
+                <div class="api-list">
+                    <code>POST /upload</code> - 上传图片<br>
+                    <code>GET /api/images</code> - 图片列表<br>
+                    <code>GET /api/stats</code> - 统计信息<br>
+                    <code>GET /trigger</code> - 远程触发拍照
+                </div>
+                <div class="card-actions">
+                    <button class="btn btn-secondary" onclick="loadStats()">刷新统计</button>
+                    <button class="btn btn-secondary" onclick="loadImages()">刷新图片</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-header">
+            <h2>🖼️ 照片画廊</h2>
+            <span class="refresh-info">每10秒自动刷新</span>
+        </div>
+
+        <div class="image-grid" id="image-grid">
+            <div class="empty-state">
+                <div class="icon">📷</div>
+                <p>加载中...</p>
+            </div>
+        </div>
+    </main>
+
+    <footer class="footer">
+        ESP32-CAM 可视化后端 · OV3660 + ST7789 · 独立前端
+    </footer>
+
+    <div class="toast" id="toast"></div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

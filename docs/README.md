@@ -31,14 +31,27 @@
                                           │
                                           ▼
 ┌─────────────────────────────────────────────────────────┐
-│                      服务端 (PC)                        │
+│                   Flask JSON API 服务端 (:5000)         │
 │  ┌──────────────────────────────────────────────────┐  │
-│  │ Flask Server (:5000) - 可视化后端                 │  │
-│  │ - /upload     接收图片，叠加时间戳                │  │
-│  │ - /gallery    可视化照片画廊                      │  │
-│  │ - /api/images 图片列表 API                       │  │
-│  │ - /api/stats  统计信息 API                       │  │
-│  │ - /trigger    远程触发拍照                        │  │
+│  │ Flask Server (:5000)                              │  │
+│  │ - POST /upload        接收图片，叠加时间戳        │  │
+│  │ - GET  /api/images    图片列表 (JSON)            │  │
+│  │ - GET  /api/stats     系统统计 (JSON)            │  │
+│  │ - GET  /image/<fn>    获取指定图片               │  │
+│  │ - GET  /latest        获取最新处理后的图片       │  │
+│  │ - DEL  /api/image/<fn> 删除图片                  │  │
+│  │ - GET|POST /trigger   远程触发ESP32拍照          │  │
+│  └──────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────┘
+                           ▲
+                           │ HTTP API (CORS)
+                           │
+┌─────────────────────────────────────────────────────────┐
+│                   前端 SPA (端口 8080)                  │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │ 独立前端应用                                       │  │
+│  │ - index.html  +  css/style.css  +  js/app.js     │  │
+│  │ - 照片画廊 / 实时预览 / 远程控制                   │  │
 │  └──────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -107,15 +120,29 @@ esp_cam/
 │   ├── wificonfig_server.py  # AP模式配置服务器
 │   └── wifi_config.json      # WiFi 配置文件 (运行时生成)
 │
-├── server/                   # PC/服务器端
-│   ├── app.py                # Flask 主应用
+├── server/                   # PC/后端 API 服务端
+│   ├── app.py                # Flask 应用工厂
 │   ├── config.py             # 配置文件
 │   ├── requirements.txt      # Python 依赖
 │   ├── uploads/              # 原始上传图片 (运行时生成)
 │   ├── processed/            # 处理后图片 (运行时生成)
+│   ├── routes/
+│   │   ├── __init__.py
+│   │   └── api.py            # API 路由 Blueprint
+│   ├── services/
+│   │   ├── __init__.py
+│   │   └── image_service.py  # 图片业务逻辑层
 │   └── utils/
 │       ├── __init__.py
 │       └── image_processor.py # 图片处理工具
+│
+├── frontend/                 # 前端 SPA 应用
+│   ├── index.html            # 主页面
+│   ├── css/
+│   │   └── style.css         # 样式文件
+│   ├── js/
+│   │   └── app.js            # 前端逻辑
+│   └── README.md             # 前端说明文档
 │
 └── docs/
     └── README.md             # 本文档
@@ -271,16 +298,85 @@ def run(wifi_manager, ap):
 
 ### 4.2 服务端模块
 
-#### `app.py` - Flask 路由
+#### `app.py` - 应用工厂
 
-| 路由              | 方法     | 功能                          |
-|------------------|----------|-------------------------------|
-| `POST /upload`   | POST     | 接收ESP32上传的图片           |
-| `GET /image/<fn>`| GET      | 获取指定图片                  |
-| `GET /latest`    | GET      | 获取最新处理后的图片          |
-| `GET /trigger`   | GET/POST | 远程触发ESP32拍照             |
-| `GET /`          | GET      | 照片画廊页面                  |
-| `GET /gallery`   | GET      | 照片画廊页面 (同上)           |
+使用 Flask Application Factory 模式创建应用实例:
+
+```python
+def create_app(config_name='default'):
+    """
+    应用工厂函数
+
+    功能:
+        1. 创建 Flask 应用实例
+        2. 加载配置文件
+        3. 注册 API Blueprint
+        4. 初始化 CORS 跨域支持
+        5. 创建上传目录
+
+    返回:
+        Flask app 实例
+    """
+```
+
+#### `routes/api.py` - API 路由 Blueprint
+
+所有 API 端点通过 Flask Blueprint 注册:
+
+```python
+from flask import Blueprint
+
+api_bp = Blueprint('api', __name__)
+
+# 注册的路由:
+# POST /upload        -> 接收ESP32上传的图片
+# GET  /image/<fn>    -> 获取指定图片
+# GET  /latest        -> 获取最新处理后的图片
+# GET  /api/images    -> 图片列表 (JSON)
+# GET  /api/stats     -> 系统统计 (JSON)
+# DELETE /api/image/<fn> -> 删除图片
+# GET|POST /trigger   -> 远程触发ESP32拍照
+```
+
+#### `services/image_service.py` - 图片业务逻辑
+
+```python
+def save_upload(file_storage, text="") -> dict:
+    """
+    保存上传的图片并处理
+
+    参数:
+        file_storage: Flask FileStorage 对象
+        text: 叠加文字
+
+    返回:
+        {"raw": str, "processed": str, "text": str}
+    """
+
+def get_image_list() -> list:
+    """获取所有已处理图片列表，按时间倒序"""
+
+def get_stats() -> dict:
+    """获取系统统计信息"""
+
+def delete_image(filename: str) -> bool:
+    """删除指定图片 (原始 + 处理后)"""
+
+def get_latest_image() -> str:
+    """返回最新处理后图片的路径"""
+```
+
+#### API 路由表
+
+| 路由                  | 方法       | 功能                          |
+|----------------------|------------|-------------------------------|
+| `POST /upload`       | POST       | 接收ESP32上传的图片           |
+| `GET /image/<fn>`    | GET        | 获取指定图片                  |
+| `GET /latest`        | GET        | 获取最新处理后的图片          |
+| `GET /api/images`    | GET        | 图片列表 (JSON)               |
+| `GET /api/stats`     | GET        | 系统统计 (JSON)               |
+| `DELETE /api/image/<fn>` | DELETE | 删除图片                      |
+| `GET|POST /trigger`  | GET/POST   | 远程触发ESP32拍照             |
 
 #### `/upload` 接口详细说明
 
@@ -326,6 +422,7 @@ ESP32-S3 CAM
 | TEXT_POSITION    | `"bottom"`           | 文字位置               |
 | TEXT_COLOR       | `(255, 255, 255)`    | 文字颜色 (白色)        |
 | TEXT_BG_COLOR    | `(0, 0, 0, 128)`     | 背景色 (半透明黑)      |
+| CORS_ORIGINS     | `["*"]`              | 允许的跨域来源         |
 
 #### `image_processor.py` - 图片处理
 
@@ -415,6 +512,8 @@ main_app.run()
 
 ### 5.4 启动服务端
 
+#### 启动后端 API 服务
+
 在 PC 上:
 
 ```bash
@@ -423,9 +522,22 @@ pip install -r requirements.txt
 python app.py
 ```
 
-服务端启动后:
-- 访问 **http://localhost:5000/** 查看照片画廊
+后端服务启动后:
+- API 服务运行在 **http://localhost:5000/**
 - ESP32 拍照后会自动上传到此服务端
+
+#### 启动前端应用
+
+在另一个终端窗口:
+
+```bash
+cd frontend
+python -m http.server 8080
+```
+
+前端启动后:
+- 访问 **http://localhost:8080** 查看照片画廊和远程控制界面
+- 前端通过 CORS 调用后端 API (默认端口 5000)
 
 ### 5.5 配置服务端
 
@@ -459,46 +571,53 @@ FONT_PATH = "C:/Windows/Fonts/simhei.ttf"
 
 ### 6.2 服务端 API
 
-| 端点              | 方法 | 说明                | 请求格式         | 响应格式 |
-|------------------|------|--------------------|-----------------|----------|
-| `/upload`        | POST | 上传图片           | multipart/form  | JSON     |
-| `/image/<fn>`    | GET  | 获取图片           | -               | image/*  |
-| `/latest`        | GET  | 获取最新图片       | -               | image/*  |
-| `/trigger`       | GET  | 远程触发拍照       | -               | JSON     |
-| `/` or `/gallery`| GET  | 可视化画廊页面     | -               | HTML     |
-| `/api/images`    | GET  | 获取图片列表       | -               | JSON     |
-| `/api/image/<fn>`| DELETE | 删除图片        | -               | JSON     |
-| `/api/stats`     | GET  | 获取统计信息       | -               | JSON     |
+| 端点                  | 方法     | 说明                | 请求格式         | 响应格式 |
+|----------------------|----------|--------------------|-----------------|----------|
+| `/upload`            | POST     | 上传图片           | multipart/form  | JSON     |
+| `/image/<fn>`        | GET      | 获取图片           | -               | image/*  |
+| `/latest`            | GET      | 获取最新图片       | -               | image/*  |
+| `/api/images`        | GET      | 图片列表           | -               | JSON     |
+| `/api/stats`         | GET      | 系统统计           | -               | JSON     |
+| `/api/image/<fn>`    | DELETE   | 删除图片           | -               | JSON     |
+| `/trigger`           | GET/POST | 远程触发拍照       | -               | JSON     |
 
-#### `/api/images` 响应示例
+#### `GET /api/images` 响应格式
 
 ```json
 {
     "status": "ok",
-    "count": 10,
+    "count": 2,
     "images": [
         {
-            "filename": "a1b2c3d4.jpg",
+            "filename": "e5f6a7b8.jpg",
             "size": 12345,
             "created": "2024-01-01T12:00:00",
-            "url": "/image/a1b2c3d4.jpg"
+            "url": "/image/e5f6a7b8.jpg"
         }
     ]
 }
 ```
 
-#### `/api/stats` 响应示例
+#### `GET /api/stats` 响应格式
 
 ```json
 {
     "status": "ok",
     "stats": {
         "processed_count": 10,
-        "raw_count": 10,
-        "total_size": 123456,
+        "raw_count": 5,
+        "total_size": 1024000,
         "esp32_configured": true,
         "esp32_url": "http://192.168.1.xxx/capture"
     }
+}
+```
+#### `DELETE /api/image/<fn>` 响应格式
+
+```json
+{
+    "status": "ok",
+    "message": "删除成功"
 }
 ```
 
@@ -567,9 +686,10 @@ A: 检查:
 
 ### 服务端
 ```
-flask>=3.0
-Pillow>=10.0
-requests>=2.31
+flask>=2.0
+flask-cors>=4.0
+Pillow>=9.0
+requests>=2.28
 ```
 
 安装: `pip install -r requirements.txt`
