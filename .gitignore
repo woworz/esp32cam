@@ -1,0 +1,14 @@
+# OpenCode runtime
+.omo/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Uploads and processed images (runtime generated)
+server/uploads/
+server/processed/
+
+# WiFi config (runtime generated)
+esp32/wifi_config.json
