@@ -96,7 +96,11 @@ async function loadStats() {
             
             // Update ESP32 status
             if (stats.esp32_configured) {
-                document.getElementById('esp32-status').textContent = '✅ 已连接';
+                document.getElementById('esp32-status').textContent = '已连接';
+            const dot = document.querySelector('.status-dot');
+            if (dot) { dot.classList.remove('status-dot--offline'); dot.classList.add('status-dot--online'); }
+            const sText = document.getElementById('sidebar-status-text');
+            if (sText) sText.textContent = 'ESP32 已连接';
                 
                 // Show ESP32 stream card
                 const esp32Card = document.getElementById('esp32-card');
@@ -109,7 +113,11 @@ async function loadStats() {
                     esp32Card.style.display = 'block';
                 }
             } else {
-                document.getElementById('esp32-status').textContent = '❌ 未配置';
+                document.getElementById('esp32-status').textContent = '未配置';
+            const dot = document.querySelector('.status-dot');
+            if (dot) { dot.classList.remove('status-dot--online'); dot.classList.add('status-dot--offline'); }
+            const sText = document.getElementById('sidebar-status-text');
+            if (sText) sText.textContent = '未连接';
                 document.getElementById('esp32-card').style.display = 'none';
             }
             
@@ -130,6 +138,8 @@ async function loadImages() {
         
         if (data.status === 'ok') {
             renderImageGrid(data.images);
+            const sub = document.getElementById('topbar-sub');
+            if (sub) sub.textContent = '共 ' + data.images.length + ' 张照片';
         }
     } catch (error) {
         showToast('加载图片失败: ' + error.message, 'error');
@@ -139,7 +149,7 @@ async function loadImages() {
         const grid = document.getElementById('image-grid');
         grid.innerHTML = `
             <div class="empty-state">
-                <div class="icon">⚠️</div>
+                <div class="empty-icon"><svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
                 <p>无法连接到后端服务器 (${API_BASE_URL})</p>
             </div>
         `;
@@ -158,7 +168,7 @@ function renderImageGrid(images) {
     if (!images || images.length === 0) {
         grid.innerHTML = `
             <div class="empty-state">
-                <div class="icon">📷</div>
+                <div class="empty-icon"><svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></div>
                 <p>暂无照片，等待 ESP32 拍照上传...</p>
             </div>
         `;
@@ -217,7 +227,7 @@ async function deleteImage(filename) {
             if (grid.querySelectorAll('.image-card').length === 0) {
                 grid.innerHTML = `
                     <div class="empty-state">
-                        <div class="icon">📷</div>
+                        <div class="empty-icon"><svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></div>
                         <p>暂无照片，等待 ESP32 拍照上传...</p>
                     </div>
                 `;
@@ -306,3 +316,5 @@ window.deleteImage = deleteImage;
 window.triggerCapture = triggerCapture;
 window.loadStats = loadStats;
 window.loadImages = loadImages;
+
+

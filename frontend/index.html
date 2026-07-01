@@ -7,107 +7,151 @@
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <header class="header">
-        <div class="header-left">
-            <h1>📷 ESP32-CAM</h1>
-            <span class="header-badge">可视化后端</span>
-        </div>
-        <div class="header-stats">
-            <div class="stat-item">
-                <div class="stat-value" id="photo-count">-</div>
-                <div class="stat-label">照片总数</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-value" id="esp32-status">❌ 未配置</div>
-                <div class="stat-label">ESP32 状态</div>
-            </div>
-        </div>
-    </header>
-
-    <main class="main">
-        <div class="control-cards">
-            <!-- ESP32 Stream Card -->
-            <div class="control-card" id="esp32-card" style="display: none;">
-                <div class="card-header">
-                    <span class="card-icon">📹</span>
-                    <h3>ESP32 实时预览</h3>
+    <div class="app">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-logo">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                        <circle cx="12" cy="13" r="4"/>
+                    </svg>
                 </div>
-                <div class="stream-container">
-                    <img id="esp32-stream" src="" alt="ESP32 Stream">
-                    <div class="stream-overlay">
-                        <span class="live-badge">LIVE</span>
+                <div class="brand-text">
+                    <span class="brand-title">ESP32-CAM</span>
+                    <span class="brand-sub">可视化后端</span>
+                </div>
+            </div>
+
+            <nav class="nav">
+                <a href="#gallery" class="nav-item active">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                    <span>照片画廊</span>
+                </a>
+                <a href="#stream" class="nav-item" id="nav-stream">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+                    <span>实时预览</span>
+                </a>
+                <a href="#api" class="nav-item">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                    <span>API 接口</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="status-pill" id="sidebar-status">
+                    <span class="status-dot status-dot--offline"></span>
+                    <span id="sidebar-status-text">未连接</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main -->
+        <main class="content">
+            <!-- Top bar -->
+            <header class="topbar">
+                <div class="topbar-title">
+                    <h1>照片画廊</h1>
+                    <p class="topbar-sub" id="topbar-sub">加载中…</p>
+                </div>
+                <div class="topbar-actions">
+                    <div class="topbar-stats">
+                        <div class="ts-item">
+                            <span class="ts-value" id="photo-count">-</span>
+                            <span class="ts-label">照片</span>
+                        </div>
+                        <div class="ts-divider"></div>
+                        <div class="ts-item">
+                            <span class="ts-value" id="esp32-status">未配置</span>
+                            <span class="ts-label">ESP32</span>
+                        </div>
+                    </div>
+                    <button class="btn btn-ghost" onclick="loadStats()" title="刷新统计">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                    </button>
+                    <button class="btn btn-ghost" onclick="loadImages()" title="刷新图片">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Cards row -->
+            <section class="cards" id="stream">
+                <div class="card card--stream" id="esp32-card" style="display:none;">
+                    <div class="card-head">
+                        <div class="card-head-left">
+                            <span class="card-title">实时预览</span>
+                            <span class="live-tag"><span class="live-dot"></span>LIVE</span>
+                        </div>
+                        <a id="esp32-fullscreen" href="" target="_blank" class="card-link">全屏打开 ↗</a>
+                    </div>
+                    <div class="stream-wrap">
+                        <img id="esp32-stream" src="" alt="ESP32 Stream">
+                    </div>
+                    <div class="card-foot">
+                        <button class="btn btn-primary" onclick="triggerCapture()">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                            远程拍照
+                        </button>
                     </div>
                 </div>
-                <div class="card-actions">
-                    <a id="esp32-fullscreen" href="" target="_blank" class="btn btn-secondary">打开全屏</a>
-                    <button class="btn btn-primary" onclick="triggerCapture()">远程拍照</button>
-                </div>
-            </div>
 
-            <!-- Stats Card -->
-            <div class="control-card stats-card">
-                <div class="card-header">
-                    <span class="card-icon">📊</span>
-                    <h3>系统统计</h3>
-                </div>
-                <div class="stats-grid">
-                    <div class="stat-box">
-                        <div class="value" id="processed-count">-</div>
-                        <div class="label">已处理</div>
+                <div class="card card--stats">
+                    <div class="card-head">
+                        <span class="card-title">系统统计</span>
                     </div>
-                    <div class="stat-box">
-                        <div class="value" id="raw-count">-</div>
-                        <div class="label">原始图片</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="value" id="total-size">-</div>
-                        <div class="label">总大小</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="value">ST7789</div>
-                        <div class="label">TFT 屏幕</div>
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <div class="stat-value" id="processed-count">-</div>
+                            <div class="stat-label">已处理</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value" id="raw-count">-</div>
+                            <div class="stat-label">原始图片</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value" id="total-size">-</div>
+                            <div class="stat-label">总大小</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value">ST7789</div>
+                            <div class="stat-label">TFT 屏幕</div>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- API Info Card -->
-            <div class="control-card">
-                <div class="card-header">
-                    <span class="card-icon">🔗</span>
-                    <h3>API 接口</h3>
+                <div class="card card--api" id="api">
+                    <div class="card-head">
+                        <span class="card-title">API 接口</span>
+                    </div>
+                    <div class="api-list">
+                        <div class="api-row"><code>POST</code><span>/upload</span><em>上传图片</em></div>
+                        <div class="api-row"><code>GET</code><span>/api/images</span><em>图片列表</em></div>
+                        <div class="api-row"><code>GET</code><span>/api/stats</span><em>统计信息</em></div>
+                        <div class="api-row"><code>GET</code><span>/trigger</span><em>远程拍照</em></div>
+                    </div>
                 </div>
-                <div class="api-list">
-                    <code>POST /upload</code> - 上传图片<br>
-                    <code>GET /api/images</code> - 图片列表<br>
-                    <code>GET /api/stats</code> - 统计信息<br>
-                    <code>GET /trigger</code> - 远程触发拍照
+            </section>
+
+            <!-- Gallery -->
+            <section class="gallery" id="gallery">
+                <div class="gallery-head">
+                    <h2>照片画廊</h2>
+                    <span class="refresh-info">每 10 秒自动刷新</span>
                 </div>
-                <div class="card-actions">
-                    <button class="btn btn-secondary" onclick="loadStats()">刷新统计</button>
-                    <button class="btn btn-secondary" onclick="loadImages()">刷新图片</button>
+                <div class="image-grid" id="image-grid">
+                    <div class="empty-state">
+                        <div class="empty-icon">
+                            <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                        </div>
+                        <p>加载中…</p>
+                    </div>
                 </div>
-            </div>
-        </div>
-
-        <div class="section-header">
-            <h2>🖼️ 照片画廊</h2>
-            <span class="refresh-info">每10秒自动刷新</span>
-        </div>
-
-        <div class="image-grid" id="image-grid">
-            <div class="empty-state">
-                <div class="icon">📷</div>
-                <p>加载中...</p>
-            </div>
-        </div>
-    </main>
-
-    <footer class="footer">
-        ESP32-CAM 可视化后端 · OV3660 + ST7789 · 独立前端
-    </footer>
+            </section>
+        </main>
+    </div>
 
     <div class="toast" id="toast"></div>
-
     <script src="js/app.js"></script>
 </body>
 </html>
