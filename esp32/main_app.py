@@ -4,7 +4,7 @@ main_app.py - ESP32-S3 CAM 主程序
 本模块是 ESP32-S3 的核心运行程序，提供以下功能:
     1. HTTP 服务器 - 提供 Web 控制界面和 MJPEG 实时视频流
     2. 拍照上传 - 按键或 HTTP 触发拍照，上传到远程服务器
-    3. WiFi 配置 - 通过 Web 页面配置 WiFi 连接
+    3. WiFi 配置 - AP 模式配网 (wificonfig_server.py)
 
 启动方式 (Thonny):
     >>> import main_app
@@ -19,7 +19,7 @@ main_app.py - ESP32-S3 CAM 主程序
     - socket: TCP 网络通信
     - machine: 硬件控制 (GPIO、复位)
     - _thread: 多线程支持 (按键监听、拍照任务)
-    - camera: 摄像头驱动 (camera.py)
+    - ovcam: 摄像头驱动 (ovcam.py)
     - wifimgr: WiFi 管理 (wifimgr.py)
 """
 
@@ -30,7 +30,7 @@ import gc
 import _thread
 import json as json_mod
 from wifimgr import WiFiManager
-from camera import Camera
+from ovcam import Camera
 from tft_display import ST7789
 
 # ==================== 全局配置 ====================
@@ -46,141 +46,6 @@ capture_flag = False    # 拍照触发标志 (True=需要拍照)
 capture_lock = _thread.allocate_lock()  # 线程锁，保护 capture_flag 的并发访问
 
 
-# ==================== Web 页面生成 ====================
-
-def _build_main_html(ip, fps_info="~10"):
-    """
-    生成主控页面 HTML
-
-    参数:
-        ip (str): ESP32-S3 的 IP 地址
-        fps_info (str): 当前帧率信息
-
-    返回:
-        str: 完整的 HTML 页面字符串
-    """
-    return f"""<!DOCTYPE html>
-<html lang="zh">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ESP32-S3 CAM 实时图传</title>
-<style>
-*{{margin:0;padding:0;box-sizing:border-box}}
-body{{font-family:-apple-system,sans-serif;background:#0a0a0a;color:#eee;min-height:100vh}}
-.header{{background:#111;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}}
-.header h2{{font-size:18px}}
-.controls{{display:flex;gap:8px;flex-wrap:wrap}}
-.btn{{padding:8px 16px;border-radius:6px;border:none;font-size:13px;cursor:pointer;color:#fff}}
-.btn-capture{{background:#e94560}}
-.btn-capture:hover{{background:#c23152}}
-.btn-capture:disabled{{background:#555;cursor:not-allowed}}
-.btn-config{{background:#333}}
-.info{{font-size:12px;color:#888;padding:8px 16px;background:#111;display:flex;justify-content:space-between;flex-wrap:wrap}}
-.stream-container{{display:flex;justify-content:center;padding:8px}}
-.stream-container img{{max-width:100%;height:auto;border-radius:4px}}
-#status{{margin-top:4px;text-align:center;font-size:13px;color:#aaa;min-height:20px}}
-</style>
-</head>
-<body>
-<div class="header">
-<h2>ESP32-S3 CAM</h2>
-<div class="controls">
-<button class="btn btn-capture" id="captureBtn" onclick="doCapture()">拍照上传</button>
-<button class="btn btn-config" onclick="location.href='/config'">WiFi设置</button>
-</div>
-</div>
-<div class="info">
-<span>IP: {ip}</span>
-<span>分辨率: 640x480 | FPS: {fps_info}</span>
-</div>
-<div class="stream-container">
-<img id="stream" src="/stream" alt="MJPEG Stream">
-</div>
-<p id="status"></p>
-<script>
-async function doCapture(){{
-var btn=document.getElementById('captureBtn');
-var st=document.getElementById('status');
-btn.disabled=true;st.textContent='拍照中...';
-try{{
-var res=await fetch('/capture');
-var data=await res.json();
-st.textContent=data.status==='ok'?'拍照上传成功':'失败: '+data.message;
-}}catch(e){{st.textContent='请求失败: '+e.message}}
-btn.disabled=false;
-}}
-</script>
-</body>
-</html>"""
-
-
-def _build_config_html(wifi_mgr):
-    """
-    生成 WiFi 配置页面 HTML
-
-    参数:
-        wifi_mgr (WiFiManager): WiFi 管理器实例，用于扫描附近网络
-
-    返回:
-        str: 完整的 HTML 页面字符串
-    """
-    nets = wifi_mgr.scan_networks()
-    options = ""
-    for net in nets[:10]:  # 最多显示10个网络
-        options += f'<option value="{net["ssid"]}">{net["ssid"]} ({net["rssi"]}dBm)</option>'
-
-    return f"""<!DOCTYPE html>
-<html lang="zh">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>WiFi设置</title>
-<style>
-*{{margin:0;padding:0;box-sizing:border-box}}
-body{{font-family:-apple-system,sans-serif;background:#1a1a2e;color:#eee;display:flex;justify-content:center;align-items:center;min-height:100vh;padding:20px}}
-.card{{background:#16213e;border-radius:12px;padding:30px 25px;max-width:400px;width:100%}}
-h2{{text-align:center;margin-bottom:20px}}
-label{{display:block;margin-top:14px;margin-bottom:4px;font-size:14px;color:#aaa}}
-input,select{{width:100%;padding:10px 12px;border-radius:8px;border:1px solid #333;background:#0f3460;color:#eee;font-size:15px}}
-.btn{{display:block;width:100%;margin-top:20px;padding:12px;background:#e94560;color:#fff;border:none;border-radius:8px;font-size:16px;cursor:pointer}}
-.back{{background:#333;margin-top:10px}}
-#msg{{margin-top:14px;text-align:center;min-height:20px;font-size:13px}}
-</style>
-</head>
-<body>
-<div class="card">
-<h2>WiFi 设置</h2>
-<form id="form">
-<label>WiFi名称</label>
-<input type="text" id="ssid" list="netlist" placeholder="输入WiFi名">
-<datalist id="netlist">{options}</datalist>
-<label>密码</label>
-<input type="password" id="password" placeholder="输入密码">
-<button type="submit" class="btn">保存并重启</button>
-</form>
-<button class="btn back" onclick="location.href='/'">返回</button>
-<p id="msg"></p>
-</div>
-<script>
-document.getElementById('form').addEventListener('submit',async function(e){{
-e.preventDefault();
-var m=document.getElementById('msg');
-m.textContent='保存中...';
-try{{
-var res=await fetch('/save_wifi',{{
-method:'POST',body:JSON.stringify({{ssid:document.getElementById('ssid').value,password:document.getElementById('password').value}})
-}});
-var d=await res.json();
-m.textContent=d.status==='ok'?'已保存，设备重启中...':'失败: '+d.message;
-}}catch(e){{m.textContent='请求失败'}}
-}});
-</script>
-</div>
-</body>
-</html>"""
-
-
 # ==================== HTTP 服务器 ====================
 
 def _send_response(client, status, content_type, body):
@@ -193,7 +58,7 @@ def _send_response(client, status, content_type, body):
         content_type (str): 内容类型 (如 "text/html; charset=utf-8")
         body (str|bytes): 响应体内容
     """
-    client.send(f"HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nConnection: close\r\n\r\n")
+    client.send("HTTP/1.1 {}\r\nContent-Type: {}\r\nConnection: close\r\n\r\n".format(status, content_type))
     if isinstance(body, str):
         client.send(body.encode("utf-8"))
     else:
@@ -232,7 +97,7 @@ def _stream_mjpeg(client):
             if frame:
                 # 发送帧头 (Content-Type + Content-Length)
                 try:
-                    client.send(f"Content-Type: image/jpeg\r\nContent-Length: {len(frame)}\r\n\r\n")
+                    client.send("Content-Type: image/jpeg\r\nContent-Length: {}\r\n\r\n".format(len(frame)))
                 except Exception:
                     break
                 # 发送帧数据
@@ -299,11 +164,11 @@ def _handle_client(client):
         # GET 请求路由
         if method == "GET":
             if path == "/" or path == "/index.html":
-                _send_response(client, "200 OK", "text/html; charset=utf-8",
-                               _build_main_html(wifi_manager.wlan.ifconfig()[0]))
+                _send_response(client, "200 OK", "application/json",
+                               '{"status":"ok","message":"Web UI moved to frontend"}')
             elif path == "/config":
-                _send_response(client, "200 OK", "text/html; charset=utf-8",
-                               _build_config_html(wifi_manager))
+                _send_response(client, "200 OK", "application/json",
+                               '{"status":"ok","message":"WiFi config via AP mode"}')
             elif path == "/capture":
                 # 设置拍照标志，触发拍照任务线程执行
                 global capture_flag
@@ -389,11 +254,11 @@ def _upload_to_server(buf):
             headers={"Content-Type": "multipart/form-data; boundary=" + boundary},
             timeout=10,
         )
-        print(f"[上传] 响应: {resp.status_code} {resp.text}")
+        print("[上传] 响应: {} {}".format(resp.status_code, resp.text))
         resp.close()
         return True
     except Exception as e:
-        print(f"[上传] 失败: {e}")
+        print("[上传] 失败: {}".format(e))
         return False
 
 
@@ -452,9 +317,9 @@ def _display_on_tft(img_data):
         # 没有 JPEG 解码库，显示提示信息
         tft_obj.fill(0x0000)
         tft_obj.show_text("Photo Captured", 40, 150, 0x07E0, 1)
-        tft_obj.show_text(f"Size: {len(img_data)}B", 60, 180, 0xFFFF, 1)
+        tft_obj.show_text("Size: {}B".format(len(img_data)), 60, 180, 0xFFFF, 1)
     except Exception as e:
-        print(f"[TFT] 显示失败: {e}")
+        print("[TFT] 显示失败: {}".format(e))
         tft_obj.fill(0x0000)
         tft_obj.show_text("Display Error", 50, 150, 0xF800, 1)
 
@@ -482,7 +347,7 @@ def _capture_worker():
             print("[拍照] 开始拍照...")
             buf = camera_obj.capture()
             if buf:
-                print(f"[拍照] 照片大小: {len(buf)} bytes")
+                print("[拍照] 照片大小: {} bytes".format(len(buf)))
                 # 显示在 TFT 屏幕上
                 _display_on_tft(buf)
                 # 上传到服务器
@@ -519,7 +384,7 @@ def run():
     if not status["connected"]:
         print("[错误] WiFi未连接，请先配置")
         return
-    print(f"[主程序] WiFi已连接, IP: {status['ip']}")
+    print("[主程序] WiFi已连接, IP: {}".format(status['ip']))
 
     # 2. 初始化摄像头 (VGA 分辨率, 质量 12)
     camera_obj = Camera(framesize=Camera.FRAMESIZE_VGA, quality=12)
@@ -542,7 +407,7 @@ def run():
     sock.bind(addr)
     sock.listen(5)
     sock.settimeout(1)
-    print(f"[HTTP] 服务器已启动 -> http://{status['ip']}")
+    print("[HTTP] 服务器已启动 -> http://{}".format(status['ip']))
 
     # 主循环: 接受客户端连接，分发给子线程处理
     while True:

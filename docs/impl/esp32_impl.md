@@ -16,15 +16,13 @@
 
 ## main_app.py
 
-文件：`esp32/main_app.py`（553 行）
+文件：`esp32/main_app.py`（419 行）
 
 | 定义 | 行号 | 签名 | 说明 |
 |------|------|------|------|
 | `SERVER_URL` | 44 | 模块常量 | 远程服务器上传地址 |
 | `capture_flag` | 45 | 全局变量 | 拍照请求标志（线程间共享） |
 | `lock` | 46 | 全局变量 | `_thread.allocate_lock()`，保护 `capture_flag` |
-| `_build_main_html` | 51 | `_build_main_html(ip, fps_info)` | 生成主控页面 HTML（含视频流 iframe） |
-| `_build_config_html` | 118 | `_build_config_html(wifi_mgr)` | 生成 WiFi 配置页面 HTML（含扫描结果） |
 | `_send_response` | 186 | `_send_response(client, status, content_type, body)` | 向 socket 客户端发送 HTTP 响应 |
 | `_stream_mjpeg` | 203 | `_stream_mjpeg(client)` | **MJPEG 视频流推送**。使用 `multipart/x-mixed-replace`，循环 `camera.capture()` 推送 JPEG 帧，间隔 50ms |
 | `_handle_client` | 260 | `_handle_client(client)` | **HTTP 请求路由分发**。解析请求方法/路径，分发到对应处理逻辑 |
@@ -36,9 +34,9 @@
 
 ---
 
-## camera.py
+## ovcam.py
 
-文件：`esp32/camera.py`（203 行）
+文件：`esp32/ovcam.py`（204 行）
 
 | 定义 | 行号 | 签名 | 说明 |
 |------|------|------|------|
@@ -52,7 +50,7 @@
 | `FRAMESIZE_UXGA` | 32 | 类常量 = 15 | 分辨率 1600x1200 |
 | `Camera` | 36 | `class Camera` | OV3660 摄像头控制类 |
 | `Camera.__init__` | 74 | `__init__(self, framesize=8, quality=12)` | 构造函数，设置默认分辨率和 JPEG 质量 |
-| `Camera.init` | 86 | `init(self)` | **硬件初始化**。配置 DVP 引脚、分辨率、质量，调用底层 `camera.init()` |
+| `Camera.init` | 86 | `init(self)` | **硬件初始化**。配置 DVP 引脚、分辨率、质量，调用底层 `camera.init(0, ...)`（首参为 sensor_id） |
 | `Camera.deinit` | 135 | `deinit(self)` | 释放摄像头硬件资源 |
 | `Camera.capture` | 146 | `capture(self) -> bytes` | **拍照**。调用 `camera.capture()` 返回 JPEG bytes，失败返回 `None` |
 | `Camera.set_framesize` | 161 | `set_framesize(self, fs)` | 动态修改分辨率（需先 `deinit` 再 `init`） |
@@ -137,16 +135,16 @@ boot.py::main()
     └─→ [成功] main_app.run()                    [main_app.py:499]
             │
             ├─→ wifimgr.WiFiManager()            [wifimgr.py:50]
-            ├─→ Camera(framesize, quality)        [camera.py:74]
-            │       └─→ init()                    [camera.py:86]
+            ├─→ Camera(framesize, quality)        [ovcam.py:74]
+            │       └─→ init()                    [ovcam.py:86]
             ├─→ ST7789()                          [tft_display.py:60]
             │       └─→ init()                    [tft_display.py:68]
             ├─→ _thread.start_new_thread(_button_thread, ())   [main_app.py:402]
             ├─→ _thread.start_new_thread(_capture_worker, ())  [main_app.py:462]
             └─→ socket server (port 80)
                     └─→ _handle_client()         [main_app.py:260]
-                            ├─→ "/"           → _build_main_html()      [main_app.py:51]
-                            ├─→ "/config"     → _build_config_html()    [main_app.py:118]
+                            ├─→ "/"           → JSON 提示(已移至前端)        
+                            ├─→ "/config"     → JSON 提示(配网走 AP 模式)     
                             ├─→ "/stream"     → _stream_mjpeg()         [main_app.py:203]
                             ├─→ "/capture"    → 设置 capture_flag
                             ├─→ "/wifi_status"→ wifi_manager.get_status() [wifimgr.py:170]

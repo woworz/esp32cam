@@ -1,5 +1,5 @@
 """
-camera.py - OV3660 摄像头驱动模块 (ESP32-S3 专用)
+ovcam.py - OV3660 摄像头驱动模块 (ESP32-S3 专用)
 
 本模块封装了 OV3660 摄像头的初始化、拍照、参数设置等功能。
 适配 ESP32-S3-DevKitC-1 开发板，通过 DVP 并行接口连接 OV3660。
@@ -85,7 +85,7 @@ class Camera:
 
     def init(self):
         """
-        初始化 OV2640 摄像头硬件
+        初始化 OV3660 摄像头硬件
 
         调用 MicroPython camera.init() 并传入所有引脚配置。
         初始化后设置分辨率、质量、图像效果等参数。
@@ -97,6 +97,7 @@ class Camera:
         try:
             # 调用底层 camera 模块初始化，传入 DVP 接口全部引脚
             camera.init(
+                0,
                 d0=self.PIN_D0,
                 d1=self.PIN_D1,
                 d2=self.PIN_D2,

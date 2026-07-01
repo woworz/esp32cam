@@ -76,7 +76,7 @@ esp_cam/
 ├── esp32/                         # ESP32-S3 MicroPython 端
 │   ├── boot.py                    # 启动引导 (自动执行)
 │   ├── main_app.py                # 主程序 (HTTP服务器 + 拍照上传)
-│   ├── camera.py                  # OV3660 摄像头驱动封装
+│   ├── ovcam.py                   # OV3660 摄像头驱动封装
 │   ├── tft_display.py             # ST7789 TFT 显示屏驱动封装
 │   ├── wifimgr.py                 # WiFi 连接管理
 │   ├── wificonfig_server.py       # AP模式配置服务器
@@ -117,7 +117,7 @@ esp_cam/
 |------|------|------|----------|----------|
 | `esp32/boot.py` | 49 | 设备启动入口，WiFi 初始连接，失败则进入 AP 配置模式 | [impl](impl/esp32_impl.md#bootpy) | [principle](principle/esp32_principle.md#启动流程) |
 | `esp32/main_app.py` | 553 | HTTP 服务器、MJPEG 流推送、拍照线程、按键监听、TFT 显示、图片上传 | [impl](impl/esp32_impl.md#main_apppy) | [principle](principle/esp32_principle.md#主程序与线程模型) |
-| `esp32/camera.py` | 203 | OV3660 摄像头封装：初始化、拍照、分辨率/质量设置 | [impl](impl/esp32_impl.md#camerapy) | [principle](principle/esp32_principle.md#摄像头驱动) |
+| `esp32/ovcam.py` | 204 | OV3660 摄像头封装：初始化、拍照、分辨率/质量设置 | [impl](impl/esp32_impl.md#camerapy) | [principle](principle/esp32_principle.md#摄像头驱动) |
 | `esp32/tft_display.py` | 239 | ST7789 TFT 驱动：SPI 通信、显示窗口、图片/文本渲染、背光控制 | [impl](impl/esp32_impl.md#tft_displaypy) | [principle](principle/esp32_principle.md#显示屏驱动) |
 | `esp32/wifimgr.py` | 186 | WiFi 连接管理：配置加载/保存、扫描、连接、AP 模式 | [impl](impl/esp32_impl.md#wifimgrpy) | [principle](principle/esp32_principle.md#wi-fi-管理) |
 | `esp32/wificonfig_server.py` | 199 | AP 模式下的 HTTP 配置服务器：WiFi 扫描页面、配置保存 | [impl](impl/esp32_impl.md#wificonfig_serverpy) | [principle](principle/esp32_principle.md#ap-配置服务器) |
@@ -150,7 +150,7 @@ esp_cam/
 ESP32-CAM (按键或 HTTP 触发)
     │
     ▼  JPEG bytes
-Camera.capture() [esp32/camera.py:146]
+Camera.capture() [esp32/ovcam.py:146]
     │
     ▼
 _upload_to_server() [esp32/main_app.py:356]
@@ -227,8 +227,8 @@ DOMContentLoaded [frontend/js/app.js:281]
 
 | 端点 | 方法 | 处理函数 | 说明 |
 |------|------|----------|------|
-| `/` | GET | `_build_main_html()` | 主控页面（实时流 + 拍照按钮） |
-| `/config` | GET | `_build_config_html()` | WiFi 配置页面 |
+| `/` | GET | JSON 提示 | Web UI 已移至前端 (frontend/) |
+| `/config` | GET | JSON 提示 | 配网走 AP 模式 (wificonfig_server.py) |
 | `/stream` | GET | `_stream_mjpeg()` | MJPEG 实时视频流 |
 | `/capture` | GET | 设置 `capture_flag` | 触发拍照并上传 |
 | `/wifi_status` | GET | `wifi_manager.get_status()` | WiFi 状态 JSON |
