@@ -50,7 +50,7 @@ class Camera:
     PIN_VSYNC = 6   # 垂直同步信号，标识一帧图像的开始
     PIN_HREF = 7    # 水平参考信号，标识一行像素数据的有效区间
 
-    # SCCB (I2C) 配置接口，用于设置OV2640寄存器
+    # SCCB (I2C) 配置接口，用于设置OV3660寄存器
     PIN_SIOD = 4    # SCCB 数据线 (等同 I2C SDA)
     PIN_SIOC = 5    # SCCB 时钟线 (等同 I2C SCL)
 
