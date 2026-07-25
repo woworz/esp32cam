@@ -6,8 +6,11 @@ tft_display.py - ST7789 TFT 显示屏驱动模块 (ESP32-S3 专用)
 
 硬件连接 (ESP32-S3 <-> ST7789 TFT):
     SPI:    SCK=GPIO39,  SDA(MOSI)=GPIO38
-    控制:   CS=GPIO37,   DC=GPIO36,  RST=GPIO35
+    控制:   CS=GPIO41,   DC=GPIO42,  RST=GPIO47
     电源:   BL=GPIO40 (背光), VCC=3.3V (必须接3.3V! 不要接5V), GND=GND
+
+注意: ESP32-S3-WROOM-1-N16R8 的 GPIO35/36/37 由 Octal PSRAM 占用，
+不能作为普通 GPIO 使用。
 
 依赖: MicroPython machine 模块 (ESP32-S3 固件内置)
 """
@@ -35,9 +38,9 @@ class ST7789:
     # ==================== ESP32-S3 ST7789 引脚配置 ====================
     PIN_SCK = 39     # SPI 时钟
     PIN_SDA = 38     # SPI 数据 (MOSI)
-    PIN_CS = 37      # 片选
-    PIN_DC = 36      # 数据/命令选择
-    PIN_RST = 35     # 复位
+    PIN_CS = 41      # 片选
+    PIN_DC = 42      # 数据/命令选择
+    PIN_RST = 47     # 复位
     PIN_BL = 40      # 背光控制
 
     # ==================== ST7789 命令 ====================
@@ -79,7 +82,7 @@ class ST7789:
             # 初始化 SPI 接口
             self.spi = machine.SPI(
                 1,  # SPI1
-                baudrate=40000000,  # 40MHz
+                baudrate=20000000,  # 面包板跳线先使用更稳妥的 20MHz
                 polarity=0,
                 phase=0,
                 sck=machine.Pin(self.PIN_SCK),
@@ -172,9 +175,10 @@ class ST7789:
         self._set_window(0, 0, self.WIDTH - 1, self.HEIGHT - 1)
         self.dc_pin.value(1)
         self.cs_pin.value(0)
-        # 批量发送颜色数据
         color_bytes = struct.pack(">H", color)
-        self.spi.write(color_bytes * (self.WIDTH * self.HEIGHT))
+        row = color_bytes * self.WIDTH
+        for _ in range(self.HEIGHT):
+            self.spi.write(row)
         self.cs_pin.value(1)
 
     def show_image(self, img_data, x, y, width, height):

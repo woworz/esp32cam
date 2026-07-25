@@ -24,6 +24,7 @@
 | `capture_flag` | 45 | 全局变量 | 拍照请求标志（线程间共享） |
 | `lock` | 46 | 全局变量 | `_thread.allocate_lock()`，保护 `capture_flag` |
 | `_send_response` | 186 | `_send_response(client, status, content_type, body)` | 向 socket 客户端发送 HTTP 响应 |
+| `_send_file` | - | `_send_file(client, path, content_type)` | 从板载文件系统以 1024 字节分块发送 `index.html` |
 | `_stream_mjpeg` | 203 | `_stream_mjpeg(client)` | **MJPEG 视频流推送**。使用 `multipart/x-mixed-replace`，循环 `camera.capture()` 推送 JPEG 帧，间隔 50ms |
 | `_handle_client` | 260 | `_handle_client(client)` | **HTTP 请求路由分发**。解析请求方法/路径，分发到对应处理逻辑 |
 | `_upload_to_server` | 356 | `_upload_to_server(buf)` | **图片上传到远程服务器**。使用 `urequests.post` 发送 multipart/form-data |
@@ -50,7 +51,7 @@
 | `FRAMESIZE_UXGA` | 32 | 类常量 = 15 | 分辨率 1600x1200 |
 | `Camera` | 36 | `class Camera` | OV3660 摄像头控制类 |
 | `Camera.__init__` | 74 | `__init__(self, framesize=8, quality=12)` | 构造函数，设置默认分辨率和 JPEG 质量 |
-| `Camera.init` | 86 | `init(self)` | **硬件初始化**。配置 DVP 引脚、分辨率、质量，调用底层 `camera.init(0, ...)`（首参为 sensor_id） |
+| `Camera.init` | 86 | `init(self)` | **硬件初始化**。配置 DVP 引脚、20MHz XCLK、JPEG/PSRAM、分辨率和质量，调用底层 `camera.init(0, ...)`（首参为 sensor_id，SCCB 使用 `siod`/`sioc`，未接线的 RESET/PWDN 均传 `-1`） |
 | `Camera.deinit` | 135 | `deinit(self)` | 释放摄像头硬件资源 |
 | `Camera.capture` | 146 | `capture(self) -> bytes` | **拍照**。调用 `camera.capture()` 返回 JPEG bytes，失败返回 `None` |
 | `Camera.set_framesize` | 161 | `set_framesize(self, fs)` | 动态修改分辨率（需先 `deinit` 再 `init`） |
@@ -84,15 +85,15 @@
 |------|------|------|------|
 | `ST7789.PIN_SCK` | 23 | 类常量 = 39 | SPI 时钟引脚 |
 | `ST7789.PIN_SDA` | 24 | 类常量 = 38 | SPI 数据 (MOSI) 引脚 |
-| `ST7789.PIN_CS` | 25 | 类常量 = 37 | 片选引脚 |
-| `ST7789.PIN_DC` | 26 | 类常量 = 36 | 数据/命令引脚 |
-| `ST7789.PIN_RST` | 27 | 类常量 = 35 | 复位引脚 |
+| `ST7789.PIN_CS` | 25 | 类常量 = 41 | 片选引脚 |
+| `ST7789.PIN_DC` | 26 | 类常量 = 42 | 数据/命令引脚 |
+| `ST7789.PIN_RST` | 27 | 类常量 = 47 | 复位引脚 |
 | `ST7789.PIN_BL` | 28 | 类常量 = 40 | 背光引脚 |
 | `ST7789.WIDTH` | 29 | 类常量 = 320 | 屏幕宽度 |
 | `ST7789.HEIGHT` | 30 | 类常量 = 240 | 屏幕高度 |
 | `ST7789` | 36 | `class ST7789` | ST7789 TFT 显示屏控制类 |
 | `ST7789.__init__` | 60 | `__init__(self)` | 构造函数。初始化 SPI 引脚参数 |
-| `ST7789.init` | 68 | `init(self)` | **硬件初始化**。初始化 SPI1@40MHz，发送完整初始化命令序列 |
+| `ST7789.init` | 68 | `init(self)` | **硬件初始化**。初始化 SPI1@20MHz，发送完整初始化命令序列 |
 | `ST7789.deinit` | 128 | `deinit(self)` | 释放 SPI 和引脚资源 |
 | `ST7789._write_cmd` | 138 | `_write_cmd(self, cmd)` | **私有**。拉低 DC，发送命令字节 |
 | `ST7789._write_data` | 145 | `_write_data(self, data)` | **私有**。拉高 DC，发送数据字节/数组 |

@@ -44,6 +44,7 @@ tft_obj = None          # TFT 显示屏对象实例
 wifi_manager = None     # WiFi 管理器实例
 capture_flag = False    # 拍照触发标志 (True=需要拍照)
 capture_lock = _thread.allocate_lock()  # 线程锁，保护 capture_flag 的并发访问
+camera_lock = _thread.allocate_lock()   # 避免视频流和拍照任务并发访问摄像头
 
 
 # ==================== HTTP 服务器 ====================
@@ -63,6 +64,31 @@ def _send_response(client, status, content_type, body):
         client.send(body.encode("utf-8"))
     else:
         client.send(body)
+
+
+def _send_file(client, path, content_type):
+    """从板载文件系统分块发送静态文件。"""
+    try:
+        file_obj = open(path, "rb")
+    except OSError:
+        _send_response(client, "500 Internal Server Error", "text/plain",
+                       "Missing board file: " + path)
+        return
+
+    try:
+        client.send(
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: {}\r\n"
+            "Cache-Control: no-cache\r\n"
+            "Connection: close\r\n\r\n".format(content_type)
+        )
+        while True:
+            chunk = file_obj.read(1024)
+            if not chunk:
+                break
+            client.sendall(chunk)
+    finally:
+        file_obj.close()
 
 
 def _stream_mjpeg(client):
@@ -93,7 +119,8 @@ def _stream_mjpeg(client):
                 break  # 客户端断开
 
             # 捕获一帧图像
-            frame = camera_obj.capture()
+            with camera_lock:
+                frame = camera_obj.capture()
             if frame:
                 # 发送帧头 (Content-Type + Content-Length)
                 try:
@@ -129,7 +156,6 @@ def _handle_client(client):
     解析请求方法和路径，分发到对应的处理函数。
     支持的路由:
         GET  /           - 主控页面
-        GET  /config     - WiFi 配置页面
         GET  /capture    - 触发拍照上传
         GET  /stream     - MJPEG 实时视频流
         GET  /wifi_status- WiFi 状态查询
@@ -164,8 +190,7 @@ def _handle_client(client):
         # GET 请求路由
         if method == "GET":
             if path == "/" or path == "/index.html":
-                _send_response(client, "200 OK", "application/json",
-                               '{"status":"ok","message":"Web UI moved to frontend"}')
+                _send_file(client, "index.html", "text/html; charset=utf-8")
             elif path == "/config":
                 _send_response(client, "200 OK", "application/json",
                                '{"status":"ok","message":"WiFi config via AP mode"}')
@@ -345,7 +370,8 @@ def _capture_worker():
 
         if need_capture:
             print("[拍照] 开始拍照...")
-            buf = camera_obj.capture()
+            with camera_lock:
+                buf = camera_obj.capture()
             if buf:
                 print("[拍照] 照片大小: {} bytes".format(len(buf)))
                 # 显示在 TFT 屏幕上
@@ -393,7 +419,7 @@ def run():
     # 3. 初始化 TFT 显示屏
     tft_obj = ST7789()
     tft_obj.init()
-    tft_obj.fill(0x0000)  # 黑色背景
+    tft_obj.fill(0x001F)  # 蓝色测试背景，便于确认屏幕通信正常
     tft_obj.show_text("ESP32-CAM", 80, 150, 0x07E0, 2)  # 绿色文字
 
     # 4. 启动后台线程

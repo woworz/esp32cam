@@ -88,6 +88,8 @@ while True:
     _thread.start_new_thread(_handle_client, (client,))
 ```
 
+主控页面作为 `index.html` 保存在板载文件系统中。浏览器访问 `/` 时，ESP32 每次读取 1024 字节并分块发送，避免把完整网页一次载入 MicroPython 堆内存。页面与设备 API 同源，直接使用 `/stream`、`/capture` 和 `/wifi_status`。
+
 每个客户端连接创建一个独立线程处理，简化并发逻辑，但受限于 ESP32-S3 的 512KB SRAM，**并发连接数有限**（默认 `listen(5)` 即最多 5 个排队连接）。
 
 ---
@@ -148,16 +150,20 @@ OV3660 使用 **8 位并行 DVP（Digital Video Port）** 接口：
 | 信号 | 功能 |
 |------|------|
 | D0-D7 | 8 位像素数据 |
-| XCLK | ESP32 提供的时钟（24MHz） |
+| XCLK | ESP32 提供的时钟（20MHz） |
 | PCLK | 像素时钟（每时钟传输一个像素） |
 | VSYNC | 帧同步（标识新一帧开始） |
 | HREF | 行同步（标识一行有效像素） |
 | SIOD/SIOC | SCCB（I2C）配置接口 |
 
+当前板卡的摄像头 RESET 与 PWDN 均未连接到 ESP32-S3 GPIO，初始化时必须传 `reset=-1`、`pwdn=-1`。摄像头使用 20MHz XCLK、JPEG 格式，并把帧缓冲区放在 PSRAM。
+
 `camera.init()` 在底层完成：
 1. 配置 ESP32-S3 的 LCD_CAM 外设为 8 位并行模式
 2. 通过 SCCB 向 OV3660 写入初始化寄存器序列
 3. 设置分辨率、格式、帧率等参数
+
+代码调用时 SCCB 引脚要使用固件 `camera` 模块识别的 `siod`/`sioc` 参数名；虽然它们功能上等同于 I2C 的 SDA/SCL，但 `sda`/`scl` 会被部分固件判定为多余关键字。
 
 ### 分辨率与质量权衡
 
@@ -183,11 +189,13 @@ ST7789 使用 **4 线 SPI** 通信：
 
 | 线 | 功能 |
 |----|------|
-| SCK | 时钟（ESP32 提供，40MHz） |
+| SCK | 时钟（ESP32 提供，面包板接线使用 20MHz） |
 | SDA (MOSI) | 数据（ESP32 → 屏幕） |
 | CS | 片选（低电平有效） |
 | DC | 数据/命令选择（低=命令，高=数据） |
 | RST | 硬件复位 |
+
+本项目使用 `SCK=GPIO39`、`SDA=GPIO38`、`CS=GPIO41`、`DC=GPIO42`、`RST=GPIO47`、`BL=GPIO40`。ESP32-S3-WROOM-1-N16R8 的 GPIO35/36/37 由 Octal PSRAM 占用，MicroPython 会对这些编号抛出 `ValueError: invalid pin`。
 
 ### 初始化序列
 

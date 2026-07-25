@@ -76,6 +76,7 @@ esp_cam/
 ├── esp32/                         # ESP32-S3 MicroPython 端
 │   ├── boot.py                    # 启动引导 (自动执行)
 │   ├── main_app.py                # 主程序 (HTTP服务器 + 拍照上传)
+│   ├── index.html                 # 板载主控页面 (实时预览 + 拍照)
 │   ├── ovcam.py                   # OV3660 摄像头驱动封装
 │   ├── tft_display.py             # ST7789 TFT 显示屏驱动封装
 │   ├── wifimgr.py                 # WiFi 连接管理
@@ -227,7 +228,7 @@ DOMContentLoaded [frontend/js/app.js:281]
 
 | 端点 | 方法 | 处理函数 | 说明 |
 |------|------|----------|------|
-| `/` | GET | JSON 提示 | Web UI 已移至前端 (frontend/) |
+| `/` | GET | `_send_file()` | 返回板载 `index.html` 主控页面 |
 | `/config` | GET | JSON 提示 | 配网走 AP 模式 (wificonfig_server.py) |
 | `/stream` | GET | `_stream_mjpeg()` | MJPEG 实时视频流 |
 | `/capture` | GET | 设置 `capture_flag` | 触发拍照并上传 |

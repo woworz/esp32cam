@@ -8,7 +8,7 @@ ovcam.py - OV3660 摄像头驱动模块 (ESP32-S3 专用)
     数据线: D0=GPIO11, D1=GPIO9,  D2=GPIO8,  D3=GPIO10
             D4=GPIO12, D5=GPIO18, D6=GPIO17, D7=GPIO16
     控制线: PCLK=GPIO13, VSYNC=GPIO6, HREF=GPIO7
-            XCLK=GPIO15 (时钟输出), RESET=GPIO14
+            XCLK=GPIO15 (时钟输出), RESET未连接
     I2C:    SIOD(SDA)=GPIO4, SIOC(SCL)=GPIO5
     电源:   PWDN 直接接 GND (摄像头常开)
 
@@ -55,7 +55,7 @@ class Camera:
     PIN_SIOC = 5    # SCCB 时钟线 (等同 I2C SCL)
 
     # 控制引脚
-    PIN_RESET = 14  # 摄像头复位引脚，低电平有效
+    PIN_RESET = -1  # 复位脚未连接，由驱动执行软件复位
     PIN_PWDN = -1   # 掉电控制，-1 表示直接接 GND，摄像头始终工作
 
     # ==================== 分辨率常量 ====================
@@ -98,6 +98,10 @@ class Camera:
             # 调用底层 camera 模块初始化，传入 DVP 接口全部引脚
             camera.init(
                 0,
+                format=camera.JPEG,
+                framesize=self.framesize,
+                xclk_freq=camera.XCLK_20MHz,
+                fb_location=camera.PSRAM,
                 d0=self.PIN_D0,
                 d1=self.PIN_D1,
                 d2=self.PIN_D2,
@@ -110,8 +114,8 @@ class Camera:
                 pclk=self.PIN_PCLK,
                 vsync=self.PIN_VSYNC,
                 href=self.PIN_HREF,
-                sda=self.PIN_SIOD,
-                scl=self.PIN_SIOC,
+                siod=self.PIN_SIOD,
+                sioc=self.PIN_SIOC,
                 reset=self.PIN_RESET,
                 pwdn=self.PIN_PWDN,
             )
