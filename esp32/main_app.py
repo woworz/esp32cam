@@ -35,7 +35,7 @@ from tft_display import ST7789
 
 # ==================== 全局配置 ====================
 BUTTON_PIN = 21     # 物理按键引脚 (GPIO21，上拉输入，按下接地)
-SERVER_URL = "http://192.168.1.100:5000/upload"  # 远程服务器上传地址
+SERVER_URL = "http://10.10.14.59:5000/upload"  # 运行 Flask 的电脑地址
 IMAGE_TEXT = "ESP32-S3 CAM"  # 叠加在照片上的标识文字
 
 # ==================== 全局状态 ====================
@@ -280,8 +280,9 @@ def _upload_to_server(buf):
             timeout=10,
         )
         print("[上传] 响应: {} {}".format(resp.status_code, resp.text))
+        success = 200 <= resp.status_code < 300
         resp.close()
-        return True
+        return success
     except Exception as e:
         print("[上传] 失败: {}".format(e))
         return False

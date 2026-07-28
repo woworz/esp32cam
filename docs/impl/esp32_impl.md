@@ -20,7 +20,7 @@
 
 | 定义 | 行号 | 签名 | 说明 |
 |------|------|------|------|
-| `SERVER_URL` | 44 | 模块常量 | 远程服务器上传地址 |
+| `SERVER_URL` | 44 | 模块常量 | Flask 服务端上传地址，必须填写运行服务电脑的局域网 IP |
 | `capture_flag` | 45 | 全局变量 | 拍照请求标志（线程间共享） |
 | `lock` | 46 | 全局变量 | `_thread.allocate_lock()`，保护 `capture_flag` |
 | `_send_response` | 186 | `_send_response(client, status, content_type, body)` | 向 socket 客户端发送 HTTP 响应 |
