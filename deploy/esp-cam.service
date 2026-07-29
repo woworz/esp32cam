@@ -1,0 +1,30 @@
+[Unit]
+Description=ESP-CAM image server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=esp-cam
+Group=esp-cam
+WorkingDirectory=/opt/esp-cam/server
+Environment=PYTHONUNBUFFERED=1
+Environment=ESP_CAM_HOST=127.0.0.1
+Environment=ESP_CAM_PORT=8000
+Environment=ESP_CAM_UPLOAD_FOLDER=/var/lib/esp-cam/uploads
+Environment=ESP_CAM_PROCESSED_FOLDER=/var/lib/esp-cam/processed
+Environment=ESP_CAM_COMMAND_STATE_FILE=/var/lib/esp-cam/commands.json
+ExecStart=/opt/esp-cam/venv/bin/gunicorn --workers 1 --threads 2 --timeout 45 --bind 127.0.0.1:8000 app:app
+Restart=on-failure
+RestartSec=3
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+StateDirectory=esp-cam
+StateDirectoryMode=0750
+ReadWritePaths=/var/lib/esp-cam
+MemoryMax=600M
+
+[Install]
+WantedBy=multi-user.target

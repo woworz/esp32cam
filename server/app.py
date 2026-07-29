@@ -15,19 +15,15 @@ app.py - Flask 应用工厂
 依赖:
     - Flask:      pip install flask
     - Pillow:     pip install Pillow
-    - requests:   pip install requests
-    - flask-cors: pip install flask-cors
 """
 
 import os
 from flask import Flask
-from flask_cors import CORS
 from config import (
     HOST,
     PORT,
     UPLOAD_FOLDER,
     PROCESSED_FOLDER,
-    CORS_ORIGINS,
 )
 from routes.api import api_bp
 
@@ -36,7 +32,7 @@ def create_app() -> Flask:
     """
     应用工厂函数
 
-    创建 Flask 应用实例，注册 Blueprint，配置 CORS，
+    创建 Flask 应用实例，注册 Blueprint，
     并确保必要的存储目录存在。
 
     返回:
@@ -46,9 +42,6 @@ def create_app() -> Flask:
 
     # 注册 API Blueprint
     app.register_blueprint(api_bp)
-
-    # 配置 CORS
-    CORS(app, origins=CORS_ORIGINS)
 
     # 确保存储目录存在
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -63,4 +56,4 @@ app = create_app()
 
 if __name__ == "__main__":
     print(f"[Server] 启动服务 -> http://{HOST}:{PORT}")
-    app.run(host=HOST, port=PORT, debug=True)
+    app.run(host=HOST, port=PORT, debug=False)

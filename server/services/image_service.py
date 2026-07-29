@@ -6,7 +6,6 @@ image_service.py - 图片业务逻辑服务层
     2. 图片列表查询
     3. 图片删除
     4. 统计信息计算
-    5. 远程转发
 
 职责:
     - 被 routes/api.py 调用
@@ -15,14 +14,12 @@ image_service.py - 图片业务逻辑服务层
 
 import os
 import uuid
-import requests
 from datetime import datetime
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional
 from utils.image_processor import add_text_overlay, build_timestamp_text
 from config import (
     UPLOAD_FOLDER,
     PROCESSED_FOLDER,
-    FORWARD_URL,
     FONT_PATH,
     TEXT_POSITION,
     TEXT_COLOR,
@@ -64,18 +61,6 @@ def save_and_process_image(
         bg_color=TEXT_BG_COLOR,
         font_path=FONT_PATH,
     )
-
-    # 可选: 转发到其他服务器
-    if FORWARD_URL:
-        try:
-            with open(processed_path, "rb") as f:
-                requests.post(
-                    FORWARD_URL,
-                    files={"image": (processed_name, f, "image/jpeg")},
-                    timeout=10,
-                )
-        except Exception:
-            pass  # 转发失败静默处理，不影响主流程
 
     return {
         "raw": raw_name,
@@ -179,15 +164,13 @@ def delete_image(filename: str) -> bool:
     return False
 
 
-def get_stats(esp32_url: Optional[str] = None) -> Dict:
+def get_stats() -> Dict:
     """
     获取系统统计信息
 
     参数:
-        esp32_url (str): ESP32 地址，用于判断配置状态
-
     返回:
-        dict: 包含 processed_count, raw_count, total_size, esp32_configured, esp32_url 的字典
+        dict: 包含 processed_count, raw_count, total_size 的字典
     """
     processed_count = 0
     raw_count = 0
@@ -209,6 +192,4 @@ def get_stats(esp32_url: Optional[str] = None) -> Dict:
         "processed_count": processed_count,
         "raw_count": raw_count,
         "total_size": total_size,
-        "esp32_configured": esp32_url is not None,
-        "esp32_url": esp32_url,
     }

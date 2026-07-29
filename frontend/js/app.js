@@ -3,8 +3,8 @@
  * Pure vanilla JavaScript SPA that calls the backend REST API
  */
 
-// Configuration - Change this to match your backend server
-const API_BASE_URL = 'http://localhost:5000';
+// 前端与 API 由同一台服务器提供，使用同源相对地址。
+const API_BASE_URL = '';
 const REFRESH_INTERVAL = 10000; // 10 seconds
 
 // State
@@ -54,6 +54,10 @@ function formatDate(dateString) {
     }).replace(/\//g, '-');
 }
 
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 async function apiRequest(endpoint, options = {}) {
     const url = `${API_BASE_URL}${endpoint}`;
     try {
@@ -94,24 +98,13 @@ async function loadStats() {
             document.getElementById('total-size').textContent = formatSize(stats.total_size);
             document.getElementById('photo-count').textContent = stats.processed_count;
             
-            // Update ESP32 status
-            if (stats.esp32_configured) {
-                document.getElementById('esp32-status').textContent = '✅ 已连接';
-                
-                // Show ESP32 stream card
-                const esp32Card = document.getElementById('esp32-card');
-                if (stats.esp32_url) {
-                    const streamUrl = stats.esp32_url.replace('/capture', '/stream');
-                    const baseUrl = stats.esp32_url.replace('/capture', '/');
-                    
-                    document.getElementById('esp32-stream').src = streamUrl;
-                    document.getElementById('esp32-fullscreen').href = baseUrl;
-                    esp32Card.style.display = 'block';
-                }
-            } else {
-                document.getElementById('esp32-status').textContent = '❌ 未配置';
-                document.getElementById('esp32-card').style.display = 'none';
-            }
+            document.getElementById('pending-commands').textContent = stats.pending_commands;
+            document.getElementById('esp32-status').textContent =
+                stats.device_online ? '✅ 在线' : '❌ 离线';
+            document.getElementById('device-last-seen').textContent =
+                stats.device_last_seen
+                    ? formatDate(stats.device_last_seen)
+                    : '尚未连接';
             
             return stats;
         }
@@ -175,6 +168,7 @@ function renderImageGrid(images) {
                 <span class="image-size">${formatSize(img.size)}</span>
             </div>
             <button class="btn-delete" onclick="deleteImage('${img.filename}')" title="删除">×</button>
+            <a class="btn-download" href="${API_BASE_URL}/download/${encodeURIComponent(img.filename)}" title="下载照片">↓</a>
         </div>
     `).join('');
 }
@@ -231,25 +225,47 @@ async function deleteImage(filename) {
 }
 
 async function triggerCapture() {
+    const captureButton = document.getElementById('capture-button');
+    captureButton.disabled = true;
+
     try {
-        showToast('正在触发拍照...', 'info');
+        showToast('正在创建拍照命令...', 'info');
         
-        const data = await apiRequest('/trigger');
+        const data = await apiRequest('/trigger', { method: 'POST' });
         
         if (data.status === 'ok') {
-            showToast('拍照已触发，等待图片上传...', 'success');
-            
-            // Refresh images after a short delay
-            setTimeout(() => {
-                loadImages();
-                loadStats();
-            }, 2000);
+            showToast('拍照命令已排队，等待设备领取...', 'success');
+            await waitForCommand(data.command.id);
         } else {
             showToast(data.message || '触发失败', 'error');
         }
     } catch (error) {
         showToast('触发失败: ' + error.message, 'error');
+    } finally {
+        captureButton.disabled = false;
     }
+}
+
+async function waitForCommand(commandId) {
+    for (let attempt = 0; attempt < 30; attempt++) {
+        await delay(2000);
+        const data = await apiRequest(`/api/commands/${encodeURIComponent(commandId)}`);
+        const command = data.command;
+
+        if (command.status === 'completed') {
+            showToast('拍照完成，照片已上传', 'success');
+            await Promise.all([loadImages(), loadStats()]);
+            return;
+        }
+        if (command.status === 'failed') {
+            showToast(command.message || '设备拍照失败', 'error');
+            await loadStats();
+            return;
+        }
+    }
+
+    showToast('命令仍在等待设备，可稍后刷新查看', 'info');
+    await loadStats();
 }
 
 // ============================================

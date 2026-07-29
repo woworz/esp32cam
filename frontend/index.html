@@ -18,7 +18,7 @@
                 <div class="stat-label">照片总数</div>
             </div>
             <div class="stat-item">
-                <div class="stat-value" id="esp32-status">❌ 未配置</div>
+                <div class="stat-value" id="esp32-status">⏳ 等待设备</div>
                 <div class="stat-label">ESP32 状态</div>
             </div>
         </div>
@@ -26,21 +26,18 @@
 
     <main class="main">
         <div class="control-cards">
-            <!-- ESP32 Stream Card -->
-            <div class="control-card" id="esp32-card" style="display: none;">
+            <!-- Cloud Device Control Card -->
+            <div class="control-card">
                 <div class="card-header">
-                    <span class="card-icon">📹</span>
-                    <h3>ESP32 实时预览</h3>
+                    <span class="card-icon">☁️</span>
+                    <h3>云端设备控制</h3>
                 </div>
-                <div class="stream-container">
-                    <img id="esp32-stream" src="" alt="ESP32 Stream">
-                    <div class="stream-overlay">
-                        <span class="live-badge">LIVE</span>
-                    </div>
+                <div class="device-summary">
+                    <p>设备通过公网主动轮询命令，无需暴露局域网端口。</p>
+                    <p>最后心跳：<span id="device-last-seen">尚未连接</span></p>
                 </div>
                 <div class="card-actions">
-                    <a id="esp32-fullscreen" href="" target="_blank" class="btn btn-secondary">打开全屏</a>
-                    <button class="btn btn-primary" onclick="triggerCapture()">远程拍照</button>
+                    <button id="capture-button" class="btn btn-primary" onclick="triggerCapture()">远程拍照</button>
                 </div>
             </div>
 
@@ -64,8 +61,8 @@
                         <div class="label">总大小</div>
                     </div>
                     <div class="stat-box">
-                        <div class="value">ST7789</div>
-                        <div class="label">TFT 屏幕</div>
+                        <div class="value" id="pending-commands">-</div>
+                        <div class="label">待执行命令</div>
                     </div>
                 </div>
             </div>
@@ -80,7 +77,8 @@
                     <code>POST /upload</code> - 上传图片<br>
                     <code>GET /api/images</code> - 图片列表<br>
                     <code>GET /api/stats</code> - 统计信息<br>
-                    <code>GET /trigger</code> - 远程触发拍照
+                    <code>POST /trigger</code> - 创建拍照命令<br>
+                    <code>GET /api/device/commands/next</code> - 设备轮询
                 </div>
                 <div class="card-actions">
                     <button class="btn btn-secondary" onclick="loadStats()">刷新统计</button>
